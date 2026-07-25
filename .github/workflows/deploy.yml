@@ -1,0 +1,45 @@
+name: Deploy life-change
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+concurrency:
+  group: deploy-lifechange-main
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH deploy (life-change 자기 compose만)
+        env:
+          SSH_KEY: ${{ secrets.LIFECHANGE_DEPLOY_KEY }}
+          SERVER: 168.107.31.154
+          USER_NAME: ubuntu
+        run: |
+          if [ -z "$SSH_KEY" ]; then
+            echo "::error::LIFECHANGE_DEPLOY_KEY 시크릿이 없습니다. 리포 Settings > Secrets 에 추가하세요."
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$SERVER" >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new "$USER_NAME@$SERVER" bash -se <<'REMOTE'
+            set -euo pipefail
+            cd ~/projects/life-change
+            git pull origin main
+            docker compose up -d --build
+            docker exec projects-nginx-1 nginx -s reload
+          REMOTE
+      - name: Healthcheck
+        env:
+          SERVER: 168.107.31.154
+        run: |
+          code=000
+          for i in $(seq 1 30); do
+            sleep 5
+            code=$(curl -s -o /dev/null -w '%{http_code}' -L -k --connect-timeout 5 "https://$SERVER/life-change/health" || echo 000)
+            { [ "$code" = "200" ] || [ "$code" = "302" ]; } && break
+            echo "waiting... (HTTP $code, $i/30)"
+          done
+          { [ "$code" = "200" ] || [ "$code" = "302" ]; } || { echo "::error::배포 헬스체크 실패 (HTTP $code)"; exit 1; }

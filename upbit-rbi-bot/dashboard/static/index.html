@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LIFE CHANGE — 업비트 자동매매 현황</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#151a23; --panel2:#1c2230; --line:#232b3a;
+    --txt:#e6edf3; --muted:#8b98a9; --accent:#5b8cff;
+    --up:#2ec26b; --down:#ff5c6c; --warn:#ffb020; --halt:#ff4d4f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    font-size:14px;line-height:1.5}
+  .wrap{max-width:1200px;margin:0 auto;padding:20px 16px 60px}
+  header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+  h1{font-size:19px;margin:0;font-weight:700;letter-spacing:.2px}
+  h1 span{color:var(--accent)}
+  .badge{padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700}
+  .badge.live{background:rgba(46,194,107,.15);color:var(--up);border:1px solid rgba(46,194,107,.4)}
+  .badge.dry{background:rgba(139,152,169,.15);color:var(--muted);border:1px solid var(--line)}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
+  .dot.on{background:var(--up);box-shadow:0 0 8px var(--up)}
+  .dot.off{background:var(--down)}
+  .sub{color:var(--muted);font-size:12px;margin:2px 0 18px}
+  .halt-banner{background:rgba(255,77,79,.12);border:1px solid var(--halt);color:#ff8f90;
+    padding:10px 14px;border-radius:10px;margin-bottom:16px;font-weight:600;display:none}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .kpi .label{color:var(--muted);font-size:12px;margin-bottom:6px}
+  .kpi .val{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+  .kpi .val.small{font-size:16px}
+  .grid{display:grid;grid-template-columns:1fr;gap:16px}
+  @media(min-width:820px){.grid.two{grid-template-columns:1.4fr 1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .card h2{font-size:13px;margin:0;padding:12px 16px;border-bottom:1px solid var(--line);
+    color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;
+    display:flex;justify-content:space-between;align-items:center}
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  th,td{text-align:right;padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase}
+  tbody tr:last-child td{border-bottom:none}
+  td.pos{color:var(--up)} td.neg{color:var(--down)}
+  .chip{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;
+    background:var(--panel2);color:var(--muted);border:1px solid var(--line)}
+  .chip.trend{color:var(--accent)} .chip.range{color:var(--warn)} .chip.reversal{color:#c07bff}
+  .empty{padding:24px 16px;color:var(--muted);text-align:center;font-size:13px}
+  .foot{margin-top:26px;color:var(--muted);font-size:11px;line-height:1.7;border-top:1px solid var(--line);padding-top:14px}
+  .kill{background:transparent;border:1px solid var(--halt);color:#ff8f90;border-radius:8px;
+    padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer}
+  .kill:hover{background:rgba(255,77,79,.12)}
+  .scroll{overflow-x:auto}
+  .row-strats{display:flex;gap:8px;flex-wrap:wrap;padding:12px 16px}
+  .strat{flex:1;min-width:130px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .strat .n{font-weight:700;text-transform:uppercase;font-size:12px;margin-bottom:4px}
+  .strat .m{color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><span>LIFE&nbsp;CHANGE</span> · 업비트 자동매매 현황</h1>
+    <span id="mode" class="badge dry">—</span>
+    <span style="color:var(--muted);font-size:12px"><span id="dot" class="dot off"></span><span id="running">연결 중…</span></span>
+    <button class="kill" onclick="doKill()" style="margin-left:auto">🛑 KILL</button>
+  </header>
+  <div class="sub" id="meta">—</div>
+
+  <div class="halt-banner" id="halt"></div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="grid two">
+    <div class="card">
+      <h2>오픈 포지션 <span id="posn" class="chip">0</span></h2>
+      <div class="scroll"><table id="postbl">
+        <thead><tr><th>전략</th><th>마켓</th><th>진입가</th><th>현재가</th><th>손익</th><th>손익%</th><th>SL/TP</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <div class="empty" id="posempty">보유 포지션 없음</div>
+    </div>
+    <div class="card">
+      <h2>전략별 성과</h2>
+      <div class="row-strats" id="strats"><div class="empty">데이터 없음</div></div>
+      <h2 style="border-top:1px solid var(--line)">레짐 / 시세</h2>
+      <div class="row-strats" id="regimes"><div class="empty">—</div></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h2>최근 거래</h2>
+    <div class="scroll"><table id="tradetbl">
+      <thead><tr><th>시각(UTC)</th><th>이벤트</th><th>전략</th><th>마켓</th><th>가격</th><th>손익</th><th>사유</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="empty" id="tradeempty">거래 기록 없음</div>
+  </div>
+
+  <div class="foot" id="foot">
+    매매 규칙 헌장 v1.0 기반 · 총자본 90,000원 · 전략 MACD/RSI/CVD · 왕복 수수료 0.1% 반영<br>
+    ⚠️ 교육·연구용 자동매매. 모든 파라미터는 출발 기본값이며 투자 손실 위험이 있습니다. 자동 갱신 5초.
+  </div>
+</div>
+
+<script>
+const BASE = "/life-change";
+const won = n => (n>0?"+":"") + Math.round(n).toLocaleString("ko-KR") + "원";
+const pct = n => (n>0?"+":"") + n.toFixed(2) + "%";
+const cls = n => n>0?"pos":(n<0?"neg":"");
+
+async function refresh(){
+  try{
+    const [st, tr, sta] = await Promise.all([
+      fetch(BASE+"/api/status").then(r=>r.json()),
+      fetch(BASE+"/api/trades?limit=30").then(r=>r.json()),
+      fetch(BASE+"/api/stats").then(r=>r.json()),
+    ]);
+    renderStatus(st); renderTrades(tr); renderStats(sta);
+  }catch(e){
+    document.getElementById("running").textContent = "연결 실패";
+  }
+}
+
+function renderStatus(s){
+  const bot=s.bot, r=s.risk;
+  const modeEl=document.getElementById("mode");
+  modeEl.textContent = bot.mode;
+  modeEl.className = "badge " + (bot.dry_run?"dry":"live");
+  document.getElementById("dot").className = "dot " + (bot.running?"on":"off");
+  document.getElementById("running").textContent = bot.running?"가동 중":"정지";
+  document.getElementById("meta").textContent =
+    `시작 ${fmt(bot.started_at)} · 마지막 tick ${fmt(bot.last_tick_at)} · ${bot.tick_count} ticks · 유니버스 ${bot.universe.join(", ")}`
+    + (bot.last_error?` · ⚠️ ${bot.last_error}`:"");
+
+  const halt=document.getElementById("halt");
+  if(r.halted){halt.style.display="block";halt.textContent="⛔ 매매 정지됨 — "+r.halt_reason;}
+  else{halt.style.display="none";}
+
+  document.getElementById("kpis").innerHTML = [
+    kpi("자본(추정)", won(r.equity), ""),
+    kpi("당일 손익", won(r.daily_pnl), cls(r.daily_pnl)),
+    kpi("오픈 포지션", r.open_positions+" / 3", ""),
+    kpi("연속 손실", r.consecutive_losses+" / 5", r.consecutive_losses>=3?"neg":""),
+    kpi("최대낙폭(MDD)", r.drawdown_pct.toFixed(1)+"%", r.drawdown_pct>=10?"neg":""),
+    kpi("진입 가능", s.can_enter, "", true),
+  ].join("");
+
+  // positions
+  const tb=document.querySelector("#postbl tbody");
+  tb.innerHTML = s.positions.map(p=>`<tr>
+    <td>${p.strategy.toUpperCase()}</td><td>${p.market}</td>
+    <td>${p.entry_price.toLocaleString()}</td><td>${p.current_price.toLocaleString()}</td>
+    <td class="${cls(p.pnl_krw)}">${won(p.pnl_krw)}</td>
+    <td class="${cls(p.pnl_pct)}">${pct(p.pnl_pct)}</td>
+    <td class="chip">${p.sl.toFixed(1)}/+${p.tp.toFixed(1)}%</td></tr>`).join("");
+  document.getElementById("posn").textContent = s.positions.length;
+  document.getElementById("posempty").style.display = s.positions.length?"none":"block";
+  document.querySelector("#postbl").style.display = s.positions.length?"table":"none";
+
+  // regimes / prices
+  const reg=Object.entries(s.regimes||{});
+  document.getElementById("regimes").innerHTML = reg.length? reg.map(([m,g])=>`
+    <div class="strat"><div class="n">${m}</div>
+    <div class="m"><span class="chip ${g}">${g}</span> ${(s.prices[m]||0).toLocaleString()}원</div></div>`).join("")
+    : `<div class="empty">아직 시세 수신 전</div>`;
+}
+
+function renderStats(list){
+  const el=document.getElementById("strats");
+  if(!list.length){el.innerHTML='<div class="empty">청산된 거래 없음</div>';return;}
+  el.innerHTML = list.map(s=>`<div class="strat">
+    <div class="n">${s.strategy.toUpperCase()}</div>
+    <div class="m">${s.trades}거래 · 승률 ${s.win_rate}%<br>
+    <span class="${cls(s.total_pnl)}">${won(s.total_pnl)}</span></div></div>`).join("");
+}
+
+function renderTrades(list){
+  const tb=document.querySelector("#tradetbl tbody");
+  tb.innerHTML = list.map(t=>`<tr>
+    <td>${fmt(t.ts)}</td><td>${badge(t.event)}</td><td>${(t.strategy||"").toUpperCase()}</td>
+    <td>${t.market||""}</td><td>${t.price?Math.round(t.price).toLocaleString():""}</td>
+    <td class="${cls(t.pnl_krw)}">${t.event==="exit"?won(t.pnl_krw):""}</td>
+    <td style="text-align:left;color:var(--muted)">${t.reason||""}</td></tr>`).join("");
+  document.getElementById("tradeempty").style.display = list.length?"none":"block";
+  document.querySelector("#tradetbl").style.display = list.length?"table":"none";
+}
+
+const kpi=(l,v,c,small)=>`<div class="kpi"><div class="label">${l}</div><div class="val ${c} ${small?'small':''}">${v}</div></div>`;
+const badge=e=>({entry:'🟢 진입',exit:'⚪ 청산',entry_fail:'🔴 실패'}[e]||e);
+const fmt=t=>t?t.replace("T"," ").replace(/(\+00:00|Z)$/,"").slice(5,19):"—";
+
+async function doKill(){
+  const token=prompt("킬 스위치 — DASHBOARD_TOKEN 입력 (전 포지션 시장가 청산 + 정지):");
+  if(!token) return;
+  const r=await fetch(BASE+"/api/kill",{method:"POST",headers:{"x-token":token}});
+  alert(r.ok? "킬 스위치 실행됨": "실패: "+r.status);
+  refresh();
+}
+
+refresh(); setInterval(refresh, 5000);
+</script>
+</body>
+</html>

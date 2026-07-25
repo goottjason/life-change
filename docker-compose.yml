@@ -1,0 +1,22 @@
+# life-change — 참고: can-agent 규칙(호스트 포트 미publish, shared-net, projects-*-1)
+services:
+  life-change:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: projects-life-change-1
+    env_file: .env
+    environment:
+      TZ: Asia/Seoul
+    volumes:
+      - lifechange-logs:/app/logs      # 거래 로그/DB 영속화 (헌장 §10)
+    networks:
+      - shared-net
+    restart: unless-stopped
+
+networks:
+  shared-net:
+    external: true                     # infra 가 만든 공유 네트워크
+
+volumes:
+  lifechange-logs:

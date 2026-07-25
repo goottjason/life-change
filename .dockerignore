@@ -1,0 +1,16 @@
+.git
+.github
+.env
+.env.*
+*.key
+*.pem
+docs
+*.md
+!upbit-rbi-bot/requirements.txt
+**/__pycache__
+*.pyc
+**/.venv
+venv
+.DS_Store
+upbit-rbi-bot/logs
+upbit-rbi-bot/tests

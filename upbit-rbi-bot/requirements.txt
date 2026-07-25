@@ -1,0 +1,10 @@
+# 봇 코어
+pyupbit>=0.2.33
+pandas>=2.0
+numpy>=1.24
+python-dotenv>=1.0
+requests>=2.31
+
+# 대시보드 웹앱
+fastapi>=0.110
+uvicorn[standard]>=0.29
