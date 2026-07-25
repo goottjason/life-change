@@ -87,6 +87,51 @@ class UpbitClient:
             return []
         return self._upbit.get_balances() or []
 
+    # ── 자본/잔고 (동적 포지션 사이징용, 헌장 §7.1) ──────────────
+    def get_account_equity(self, price_lookup) -> tuple[float, float]:
+        """
+        (주문가능 원화, 총 자산) 반환.
+          - 총 자산 = 원화(가용+잠금) + Σ(보유코인 수량 × 현재가)
+          - price_lookup(market) → 현재가(없으면 None). 캐시에 없으면 get_price 로 조회.
+        DRY_RUN(모의)에서는 계좌가 없으므로 폴백 자본을 그대로 사용한다.
+        """
+        if settings.dry_run or self._upbit is None:
+            cap = settings.paper_capital_krw
+            return cap, cap
+        try:
+            bals = self._upbit.get_balances() or []
+        except Exception:
+            cap = settings.paper_capital_krw
+            return cap, cap
+        available_krw = 0.0
+        krw_total = 0.0
+        coin_value = 0.0
+        for b in bals:
+            cur = b.get("currency")
+            bal = float(b.get("balance", 0) or 0)
+            locked = float(b.get("locked", 0) or 0)
+            if cur == "KRW":
+                available_krw += bal
+                krw_total += bal + locked
+                continue
+            qty = bal + locked
+            if qty <= 0:
+                continue
+            market = f"KRW-{cur}"
+            px = price_lookup(market) if price_lookup else None
+            if not px:
+                try:
+                    px = self.get_price(market)
+                except Exception:
+                    px = 0.0
+            coin_value += qty * (px or 0.0)
+        total_equity = krw_total + coin_value
+        # 계좌가 비어 있으면(0원) 폴백으로 대체해 서킷/사이징이 0으로 붕괴하지 않게 함
+        if total_equity <= 0:
+            cap = settings.paper_capital_krw
+            return 0.0, cap
+        return available_krw, total_equity
+
     @staticmethod
     def _parse(resp: dict | None) -> OrderResult:
         if not resp or "uuid" not in resp:

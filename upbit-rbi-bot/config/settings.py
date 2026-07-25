@@ -27,6 +27,9 @@ class Settings:
     # 거래 유니버스 (헌장 §1: 고유동성 코인 한정)
     universe: tuple[str, ...] = ("KRW-BTC", "KRW-ETH")
 
+    # 모의(DRY_RUN) 및 계좌조회 실패 시 사용할 폴백 자본. 실전은 계좌 잔고를 읽는다.
+    paper_capital_krw: float = float(os.getenv("PAPER_CAPITAL_KRW", "90000"))
+
     # 운영 모드
     dry_run: bool = os.getenv("DRY_RUN", "true").lower() == "true"  # 기본은 모의(안전)
     loop_interval_sec: int = int(os.getenv("LOOP_INTERVAL_SEC", "10"))

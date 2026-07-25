@@ -13,7 +13,9 @@ from enum import Enum
 CHARTER_VERSION = "v1.0"
 
 # ── 자본·수수료 (헌장 §1, §13) ────────────────────────────────
-TOTAL_CAPITAL_KRW = 90_000          # 총자본
+# 자본은 더 이상 고정값이 아니라 '실계좌 잔고(총 자산)'를 런타임에 읽어서 쓴다 (헌장 v1.1 §7.1).
+# 아래 값은 DRY_RUN(모의) 및 계좌 조회 실패 시의 폴백 기본값일 뿐이다.
+DEFAULT_CAPITAL_KRW = 90_000        # 폴백 기본 자본 (실전에선 계좌 잔고로 대체됨)
 ALLOC_PER_STRATEGY_RATIO = 1 / 3    # 전략당 배분 ≈33% = 30,000원 (§7.1)
 FEE_ROUNDTRIP = 0.001               # 왕복 수수료 0.1% (0.05% × 2) (§6, 업비트 KRW)
 MIN_ORDER_KRW = 5_000               # 업비트 최소주문금액 (§6.5)
@@ -72,24 +74,33 @@ STRATEGY_SPECS: dict[str, StrategySpec] = {
     "cvd":  StrategySpec("cvd",  stop_loss=0.03, take_profit=0.05, regime=Regime.REVERSAL),
 }
 
-# ── 파생 계산 헬퍼 ───────────────────────────────────────────
-def max_loss_per_trade_krw() -> float:
-    """1거래 최대 손실 금액 (§5.1). 90,000 × 1% = 900원."""
-    return TOTAL_CAPITAL_KRW * RISK_PER_TRADE_RATIO
+# ── 파생 계산 헬퍼 (모두 '현재 자본(capital)'을 인자로 받는다) ──────────────
+# capital = 실계좌 총 자산(원화 + 보유코인 평가액). 입금하면 자동으로 커지고,
+# 출금/손실이면 작아진다 → 모든 리스크 한도·포지션 크기가 잔고에 비례해 스케일된다.
+
+def max_loss_per_trade_krw(capital: float) -> float:
+    """1거래 최대 손실 금액 (§5.1). capital × 1%. 예: 90,000 → 900원."""
+    return capital * RISK_PER_TRADE_RATIO
 
 
-def daily_loss_limit_krw() -> float:
-    """일일 손실 한도 금액 (§5.2). -2,700원."""
-    return TOTAL_CAPITAL_KRW * DAILY_LOSS_LIMIT_RATIO
+def daily_loss_limit_krw(capital: float) -> float:
+    """일일 손실 한도 금액 (§5.2). capital × 3%. 예: 90,000 → 2,700원."""
+    return capital * DAILY_LOSS_LIMIT_RATIO
 
 
-def position_size_krw(stop_loss_pct: float) -> float:
+def position_size_krw(stop_loss_pct: float, capital: float,
+                      available_krw: float | None = None) -> float:
     """
     리스크 상한 기반 포지션 크기 (§7.2).
         포지션 크기 = 1거래최대손실 ÷ 손절폭
-    예: 900 / 0.03 = 30,000원. 손절 -6%면 15,000원.
-    전략당 배분 상한(33%)을 넘지 않도록 clamp 한다.
+    예(capital=90,000): 900 / 0.03 = 30,000원. 손절 -6%면 15,000원.
+    - 전략당 배분 상한(capital × 1/3)을 넘지 않게 clamp.
+    - 주문가능 원화(available_krw)가 주어지면 그 이하로 clamp (잔고 초과 주문 방지).
+    반환값이 MIN_ORDER_KRW 미만이면 호출측이 '진입 불가'로 처리한다(강제로 올리지 않음).
     """
-    raw = max_loss_per_trade_krw() / stop_loss_pct
-    cap = TOTAL_CAPITAL_KRW * ALLOC_PER_STRATEGY_RATIO
-    return max(MIN_ORDER_KRW, min(raw, cap))
+    raw = max_loss_per_trade_krw(capital) / stop_loss_pct
+    alloc_cap = capital * ALLOC_PER_STRATEGY_RATIO
+    size = min(raw, alloc_cap)
+    if available_krw is not None:
+        size = min(size, available_krw)
+    return max(0.0, size)

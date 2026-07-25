@@ -100,7 +100,7 @@
   </div>
 
   <div class="foot" id="foot">
-    매매 규칙 헌장 v1.0 기반 · 총자본 90,000원 · 전략 MACD/RSI/CVD · 왕복 수수료 0.1% 반영<br>
+    매매 규칙 헌장 v1.1 기반 · 자본=계좌 잔고 연동(입금 시 자동 스케일) · 전략 MACD/RSI/CVD · 왕복 수수료 0.1% 반영<br>
     ⚠️ 교육·연구용 자동매매. 모든 파라미터는 출발 기본값이며 투자 손실 위험이 있습니다. 자동 갱신 5초.
   </div>
 </div>
@@ -108,6 +108,7 @@
 <script>
 const BASE = "/life-change";
 const won = n => (n>0?"+":"") + Math.round(n).toLocaleString("ko-KR") + "원";
+const won0 = n => Math.round(n).toLocaleString("ko-KR") + "원";
 const pct = n => (n>0?"+":"") + n.toFixed(2) + "%";
 const cls = n => n>0?"pos":(n<0?"neg":"");
 
@@ -140,11 +141,13 @@ function renderStatus(s){
   else{halt.style.display="none";}
 
   document.getElementById("kpis").innerHTML = [
-    kpi("자본(추정)", won(r.equity), ""),
+    kpi("자본(계좌 총자산)", won0(r.equity), ""),
+    kpi("주문가능 원화", won0(r.available_krw ?? 0), ""),
     kpi("당일 손익", won(r.daily_pnl), cls(r.daily_pnl)),
     kpi("오픈 포지션", r.open_positions+" / 3", ""),
     kpi("연속 손실", r.consecutive_losses+" / 5", r.consecutive_losses>=3?"neg":""),
-    kpi("최대낙폭(MDD)", r.drawdown_pct.toFixed(1)+"%", r.drawdown_pct>=10?"neg":""),
+    kpi("1거래 리스크", won0(r.max_loss_per_trade ?? 0)+" (1%)", "", true),
+    kpi("일일 한도", won0(r.daily_loss_limit ?? 0)+" (3%)", "", true),
     kpi("진입 가능", s.can_enter, "", true),
   ].join("");
 

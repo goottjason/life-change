@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 
 from config.settings import settings
+from config import charter as C
 from config.charter import STRATEGY_SPECS
 from data.upbit_client import UpbitClient
 from bot.order_manager import OrderManager
@@ -68,6 +69,13 @@ class Trader:
         if not self.failsafe.check_feed():
             return
 
+        # 자본 갱신: 실계좌 잔고(총 자산)를 읽어 사이징·서킷의 기준으로 삼는다 (§7.1)
+        try:
+            avail, equity = self.client.get_account_equity(self.last_prices.get)
+            self.risk.update_capital(avail, equity)
+        except Exception as e:
+            self.failsafe.on_api_error(e)
+
         for market in settings.universe:
             try:
                 df = self.client.get_candles(market)
@@ -119,6 +127,9 @@ class Trader:
     def _open(self, name: str, strat: BaseStrategy, market: str,
               price: float, df: pd.DataFrame) -> None:
         krw = self.risk.size_for(strat.spec.stop_loss)     # §7.2
+        # 잔고 부족 등으로 주문금액이 최소주문금액 미만이면 조용히 스킵(로그 스팸 방지)
+        if krw < C.MIN_ORDER_KRW:
+            return
         res = self.orders.enter_long(market, price, krw)   # §6
         if not res.ok:
             self.logger.log("entry_fail", strategy=name, market=market, reason=res.error)
@@ -153,7 +164,7 @@ class Trader:
     # ── 대시보드용 상태 스냅샷 (헌장 §10 관찰) ────────────────
     def snapshot(self) -> dict:
         s = self.risk.s
-        equity = s.equity_high + s.daily_pnl
+        equity = s.capital  # 실계좌 총 자산 (§7.1)
         drawdown = (s.equity_high - equity) / s.equity_high if s.equity_high else 0.0
         positions = []
         for name, pos in list(self.positions.items()):
@@ -175,6 +186,9 @@ class Trader:
                 "consecutive_losses": s.consecutive_losses,
                 "open_positions": s.open_positions,
                 "equity": round(equity),
+                "available_krw": round(s.available_krw),
+                "max_loss_per_trade": round(C.max_loss_per_trade_krw(s.capital)),
+                "daily_loss_limit": round(C.daily_loss_limit_krw(s.capital)),
                 "equity_high": round(s.equity_high),
                 "drawdown_pct": round(drawdown * 100, 2),
                 "halted": s.halted,
