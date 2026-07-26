@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
-CHARTER_VERSION = "v1.7"
+CHARTER_VERSION = "v1.8"
 
 # ── 자본·수수료 (헌장 §1, §13) ────────────────────────────────
 # 자본은 더 이상 고정값이 아니라 '실계좌 잔고(총 자산)'를 런타임에 읽어서 쓴다 (헌장 v1.1 §7.1).
@@ -57,7 +57,11 @@ UNIVERSE_TOP_N = 15                      # 동시 추적 종목 수 (동시 보�
 MIN_TURNOVER_24H_KRW = 3_000_000_000     # 24h 거래대금 하한(30억) 미달 제외
 UNIVERSE_REFRESH_SEC = 600               # 적격 유니버스 재조회 주기(10분)
 STABLECOINS = {"USDT", "USDC", "DAI", "TUSD", "BUSD"}
-UNIVERSE_BLACKLIST: set[str] = set()     # 수동 제외 심볼(예: {"XYZ"})
+# 수동 제외 심볼 (측정 증거 기반). 동적 안정성 필터(§3.2-d)는 관측 3회가 쌓여야 작동하므로,
+# 이미 8회 샘플링으로 비용 초과가 확인된 종목은 여기서 즉시 차단한다 (2026-07-26 실측 중앙값):
+#   LPT 0.245% · ICP 0.190% · AXS 0.153%  → 왕복비용 0.25~0.35% > 거래당 기댓값 0.26%
+# 스프레드가 개선되면 재측정 후 해제한다(`spread_check.py --sample mid`).
+UNIVERSE_BLACKLIST: set[str] = {"LPT", "ICP", "AXS"}
 
 # 호가 스프레드 상한 (v1.3) — 거래대금만 보면 안 되는 이유:
 # 업비트 KRW는 가격대별 호가 단위(tick)가 고정이라 **가격이 낮은 코인은 한 틱이 이미 0.2~0.9%**다.

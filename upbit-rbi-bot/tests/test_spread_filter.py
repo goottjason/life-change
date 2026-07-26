@@ -181,3 +181,10 @@ def test_불안정_종목은_유니버스에서_빠진다():
 def test_안정성_기준값():
     assert C.SPREAD_HISTORY_LEN == 6 and C.SPREAD_HISTORY_MIN_SAMPLES == 3
     assert C.SPREAD_MAX_MULT == 2.0
+
+
+def test_측정근거_블랙리스트():
+    """8회 샘플링으로 비용 초과가 확인된 종목은 동적 필터를 기다리지 않고 즉시 차단한다."""
+    assert {"LPT", "ICP", "AXS"} <= C.UNIVERSE_BLACKLIST
+    s = Screener()
+    assert "LPT" in s.exclude        # 스크리너 제외 집합에 반영
