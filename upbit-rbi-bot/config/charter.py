@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
-CHARTER_VERSION = "v1.0"
+CHARTER_VERSION = "v1.2"
 
 # ── 자본·수수료 (헌장 §1, §13) ────────────────────────────────
 # 자본은 더 이상 고정값이 아니라 '실계좌 잔고(총 자산)'를 런타임에 읽어서 쓴다 (헌장 v1.1 §7.1).
@@ -56,22 +56,22 @@ class Regime(str, Enum):
 
 @dataclass(frozen=True)
 class StrategySpec:
-    """전략별 진입/청산 파라미터 (헌장 §2, §4)."""
+    """전략별 진입/청산 파라미터 (헌장 §2, §4). SL/TP는 ATR 배수로 정규화(v1.2)."""
     name: str
-    stop_loss: float      # 손절 % (양수로 표기, 진입가 대비 하락폭)
-    take_profit: float    # 익절 %
-    regime: Regime        # 이 전략이 유리한 레짐 (레짐 필터에서 사용)
+    atr_stop_mult: float  # k: 손절거리 = k × ATR
+    rr: float             # 손익비: 익절거리 = rr × (k × ATR)
+    regime: Regime        # 이 전략이 유리한 레짐
 
     @property
     def risk_reward(self) -> float:
-        return self.take_profit / self.stop_loss
+        return self.rr
 
 
 # 전략 스펙 — 헌장 §4 표와 1:1 대응 (출발 기본값, 백테스트로 조정)
 STRATEGY_SPECS: dict[str, StrategySpec] = {
-    "macd": StrategySpec("macd", stop_loss=0.03, take_profit=0.06, regime=Regime.TREND),
-    "rsi":  StrategySpec("rsi",  stop_loss=0.025, take_profit=0.04, regime=Regime.RANGE),
-    "cvd":  StrategySpec("cvd",  stop_loss=0.03, take_profit=0.05, regime=Regime.REVERSAL),
+    "macd": StrategySpec("macd", atr_stop_mult=1.5, rr=2.0, regime=Regime.TREND),
+    "rsi":  StrategySpec("rsi",  atr_stop_mult=1.2, rr=1.6, regime=Regime.RANGE),
+    "cvd":  StrategySpec("cvd",  atr_stop_mult=1.3, rr=1.7, regime=Regime.REVERSAL),
 }
 
 # ── 파생 계산 헬퍼 (모두 '현재 자본(capital)'을 인자로 받는다) ──────────────
@@ -88,19 +88,23 @@ def daily_loss_limit_krw(capital: float) -> float:
     return capital * DAILY_LOSS_LIMIT_RATIO
 
 
-def position_size_krw(stop_loss_pct: float, capital: float,
+def position_size_krw(stop_ratio: float, capital: float,
                       available_krw: float | None = None) -> float:
     """
     리스크 상한 기반 포지션 크기 (§7.2).
-        포지션 크기 = 1거래최대손실 ÷ 손절폭
-    예(capital=90,000): 900 / 0.03 = 30,000원. 손절 -6%면 15,000원.
-    - 전략당 배분 상한(capital × 1/3)을 넘지 않게 clamp.
-    - 주문가능 원화(available_krw)가 주어지면 그 이하로 clamp (잔고 초과 주문 방지).
-    반환값이 MIN_ORDER_KRW 미만이면 호출측이 '진입 불가'로 처리한다(강제로 올리지 않음).
+        포지션 크기 = 1거래최대손실 ÷ 손절거리비율(stop_ratio)
+    stop_ratio = k × ATR / 진입가 (ATR 정규화, v1.2). 코인 변동성이 크면 stop_ratio↑ → 크기↓
+    → 모든 코인이 동일 KRW 리스크(자본 1%). 전략당 배분·주문가능원화로 clamp.
     """
-    raw = max_loss_per_trade_krw(capital) / stop_loss_pct
+    if stop_ratio <= 0:
+        return 0.0
+    raw = max_loss_per_trade_krw(capital) / stop_ratio
     alloc_cap = capital * ALLOC_PER_STRATEGY_RATIO
     size = min(raw, alloc_cap)
     if available_krw is not None:
         size = min(size, available_krw)
     return max(0.0, size)
+
+
+# ── ATR 사이징 폴백 (헌장 §7, v1.2) ──────────────────────────
+FALLBACK_STOP_RATIO = 0.03   # entry_atr 없을 때(봉 부족/복원) SL 거리 기본값

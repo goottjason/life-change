@@ -29,9 +29,18 @@ class Position:
     entry_time: object          # 진입 캔들 타임스탬프 (시간 손절 계산용 §4-A) — pd.Timestamp
     entry_atr: float = 0.0      # 진입 시 ATR (변동성 축소 판정용 §4-A)
     highest_price: float = field(init=False)
+    sl_ratio: float = field(init=False)   # 진입 시 ATR로 계산한 손절거리비율
+    tp_ratio: float = field(init=False)   # 익절거리비율
 
     def __post_init__(self):
+        from config.charter import FALLBACK_STOP_RATIO
         self.highest_price = self.entry_price
+        if self.entry_price > 0 and self.entry_atr > 0:
+            stop = self.spec.atr_stop_mult * self.entry_atr / self.entry_price
+        else:
+            stop = FALLBACK_STOP_RATIO
+        self.sl_ratio = stop
+        self.tp_ratio = self.spec.rr * stop
 
     @property
     def spec(self):
@@ -49,14 +58,10 @@ class Position:
         self.highest_price = max(self.highest_price, price)
 
     def check_price_exit(self, price: float) -> ExitReason:
-        """
-        가격 기반 청산 판정 (§4.1, §4.2).
-        TP/SL 은 '수수료 제외 총등락(gross)' 기준으로 임계 비교한다.
-        (SL 은 확실히 지키기 위해 gross 하락폭으로 판정)
-        """
+        """가격 기반 청산 판정 (§4.1, §4.2). 진입 시 ATR로 정한 sl/tp 비율(gross) 기준."""
         gross = (price - self.entry_price) / self.entry_price
-        if gross >= self.spec.take_profit:
+        if gross >= self.tp_ratio:
             return ExitReason.TAKE_PROFIT
-        if gross <= -self.spec.stop_loss:
+        if gross <= -self.sl_ratio:
             return ExitReason.STOP_LOSS
         return ExitReason.NONE

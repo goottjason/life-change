@@ -159,7 +159,12 @@ class Trader:
     # ── 진입/청산 실행 ───────────────────────────────────────
     def _open(self, name: str, strat: BaseStrategy, market: str,
               price: float, df: pd.DataFrame) -> None:
-        krw = self.risk.size_for(strat.spec.stop_loss)     # §7.2
+        entry_atr = float(ta.atr(df).iloc[-1]) if len(df) >= 14 else 0.0
+        if price > 0 and entry_atr > 0:
+            stop_ratio = strat.spec.atr_stop_mult * entry_atr / price
+        else:
+            stop_ratio = C.FALLBACK_STOP_RATIO
+        krw = self.risk.size_for(stop_ratio)                # §7.2 (ATR 정규화 v1.2)
         # 잔고 부족 등으로 주문금액이 최소주문금액 미만이면 조용히 스킵(로그 스팸 방지)
         if krw < C.MIN_ORDER_KRW:
             return
@@ -168,7 +173,6 @@ class Trader:
             self.logger.log("entry_fail", strategy=name, market=market,
                             reason=res.error or "no fill")
             return
-        entry_atr = float(ta.atr(df).iloc[-1]) if len(df) >= 14 else 0.0
         self.positions[name] = Position(
             strategy=name, market=market, entry_price=res.avg_price or price,
             size_krw=krw, volume=res.filled_volume, entry_time=df.index[-1],
@@ -236,8 +240,8 @@ class Trader:
                 "size_krw": pos.size_krw,
                 "pnl_krw": round(pos.pnl_krw(price)),
                 "pnl_pct": round(pos.pnl_ratio(price) * 100, 2),
-                "sl": -pos.spec.stop_loss * 100,
-                "tp": pos.spec.take_profit * 100,
+                "sl": -pos.sl_ratio * 100,
+                "tp": pos.tp_ratio * 100,
             })
         return {
             "risk": {

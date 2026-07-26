@@ -54,12 +54,9 @@ class RiskManager:
         return True, "ok"
 
     # ── 포지션 사이징 (헌장 §7) ──────────────────────────────
-    def size_for(self, stop_loss_pct: float) -> float:
-        """
-        1거래 리스크 = 현재자본 1% 를 만족하는 포지션 크기 (§7.2).
-        주문가능 원화 이하로 clamp. MIN_ORDER 미만이면 호출측이 진입 스킵.
-        """
-        return C.position_size_krw(stop_loss_pct, self.s.capital, self.s.available_krw)
+    def size_for(self, stop_ratio: float) -> float:
+        """1거래 리스크 = 자본 1%를 만족하는 포지션 크기 (§7.2, ATR 정규화 v1.2)."""
+        return C.position_size_krw(stop_ratio, self.s.capital, self.s.available_krw)
 
     # ── 체결 결과 반영 ───────────────────────────────────────
     def on_open(self) -> None:
