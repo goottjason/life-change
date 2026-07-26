@@ -47,10 +47,10 @@ class Trader:
     def __init__(self):
         self.client = UpbitClient()
         self.orders = OrderManager(self.client)
-        self.screener = Screener()
         self.risk = RiskManager()
         self.strategies = build_strategies()
         self.notifier = TelegramNotifier()
+        self.screener = Screener(notifier=self.notifier)
         self.failsafe = Failsafe(self.client, self.orders, self.notifier)
         self.logger = TradeLogger()
         self.positions: dict[str, Position] = {}   # key: strategy name (전략당 1포지션 §3.4)
@@ -85,8 +85,10 @@ class Trader:
             try:
                 rec_df = self.client.get_candles(o["market"])
                 entry_atr = float(ta.atr(rec_df).iloc[-1]) if len(rec_df) >= 14 else 0.0
-            except Exception:
+            except Exception as e:
                 entry_atr = 0.0
+                self.logger.log("recover", strategy=slot, market=o["market"],
+                                reason=f"atr_lookup_failed: {e}")
             self.positions[slot] = Position(
                 strategy=slot, market=o["market"], entry_price=o["avg_price"],
                 size_krw=o["avg_price"] * o["volume"], volume=o["volume"],
@@ -167,7 +169,7 @@ class Trader:
     def _open(self, name: str, strat: BaseStrategy, market: str,
               price: float, df: pd.DataFrame) -> None:
         entry_atr = float(ta.atr(df).iloc[-1]) if len(df) >= 14 else 0.0
-        if entry_atr <= 0:
+        if not (entry_atr > 0):
             self.logger.log("entry_fail", strategy=name, market=market, reason="no atr")
             return
         stop_ratio = C.stop_ratio_from_atr(strat.spec.atr_stop_mult, entry_atr, price)

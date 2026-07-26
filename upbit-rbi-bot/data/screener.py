@@ -41,28 +41,39 @@ def select_universe(tickers: list[dict], top_n: int,
 
 class Screener:
     def __init__(self, fallback=None, top_n=None, min_turnover=None,
-                 refresh_sec=None, exclude=None):
+                 refresh_sec=None, exclude=None, notifier=None):
         self.fallback = list(fallback if fallback is not None else settings.universe)
         self.top_n = top_n if top_n is not None else C.UNIVERSE_TOP_N
         self.min_turnover = min_turnover if min_turnover is not None else C.MIN_TURNOVER_24H_KRW
         self.refresh_sec = refresh_sec if refresh_sec is not None else C.UNIVERSE_REFRESH_SEC
         self.exclude = exclude if exclude is not None else (C.STABLECOINS | C.UNIVERSE_BLACKLIST)
+        self.notifier = notifier
         self._cache: list[str] = []
-        self._last = 0.0
+        self._last = None
+        self._in_fallback = False
+
+    def _notify(self, msg):
+        self.notifier.send(msg) if self.notifier else print(msg)
 
     def eligible(self) -> list[str]:
         now = time.monotonic()
-        if self._cache and (now - self._last) < self.refresh_sec:
-            return self._cache
+        if self._last is not None and (now - self._last) < self.refresh_sec:
+            return self._cache or self.fallback
         try:
             picked = select_universe(self._fetch_tickers(), self.top_n,
                                      self.min_turnover, self.exclude)
         except Exception:
             picked = []
+        self._last = now   # throttle regardless of success/failure (outage-safe)
         if picked:
+            if self._in_fallback:
+                self._notify("✅ 스크리너 복구 — 동적 유니버스 재개")
+                self._in_fallback = False
             self._cache = picked
-            self._last = now
             return picked
+        if not self._in_fallback:
+            self._notify("⚠️ 스크리너 조회 실패 — 폴백 유니버스 사용 (§3)")
+            self._in_fallback = True
         return self._cache or self.fallback
 
     def _fetch_tickers(self) -> list[dict]:

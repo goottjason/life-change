@@ -43,3 +43,22 @@ def test_eligible_fetches_then_caches():
     assert s.eligible() == ["KRW-BTC", "KRW-ETH"]
     s.eligible()
     assert S.calls == 1   # refresh_sec 이내 → 캐시 사용
+
+
+def test_eligible_warns_once_on_fallback_transition():
+    class FakeNotifier:
+        def __init__(self):
+            self.messages = []
+        def send(self, msg):
+            self.messages.append(msg)
+
+    class S(Screener):
+        def _fetch_tickers(self):
+            raise RuntimeError("network down")
+
+    notifier = FakeNotifier()
+    s = S(fallback=("KRW-BTC", "KRW-ETH"), refresh_sec=0, notifier=notifier)
+    s.eligible()
+    s.eligible()
+    fallback_msgs = [m for m in notifier.messages if "폴백" in m]
+    assert len(fallback_msgs) == 1
