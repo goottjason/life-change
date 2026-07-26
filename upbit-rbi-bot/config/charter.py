@@ -47,6 +47,13 @@ BACKTEST_MIN_TRADES = 100
 # ── 레짐 필터 (헌장 §8) ──────────────────────────────────────
 ADX_TREND_THRESHOLD = 25            # ADX 이 값 이상이면 추세장 (초기값, 백테스트로 확정)
 
+# ── 종목 스크리닝 (헌장 §3, v1.2) ────────────────────────────
+UNIVERSE_TOP_N = 6                       # 거래대금 상위 N개만 거래 후보
+MIN_TURNOVER_24H_KRW = 10_000_000_000    # 24h 거래대금 하한(100억) 미달 제외
+UNIVERSE_REFRESH_SEC = 600               # 적격 유니버스 재조회 주기(10분)
+STABLECOINS = {"USDT", "USDC", "DAI", "TUSD", "BUSD"}
+UNIVERSE_BLACKLIST: set[str] = set()     # 수동 제외 심볼(예: {"XYZ"})
+
 
 class Regime(str, Enum):
     TREND = "trend"      # 추세장 → MACD
