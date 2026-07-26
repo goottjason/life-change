@@ -107,7 +107,8 @@ def test_tradable_now_판정():
 def test_헌장_풀_확대값():
     assert C.UNIVERSE_TOP_N == 15                     # 6 → 15 (v1.6)
     assert C.MIN_TURNOVER_24H_KRW == 100_000_000      # 100억 → 30억 → 1억 (v2.0)
-    assert C.SPREAD_CANDIDATE_MULT == 8               # 후보 스캔 범위 확대
+    # 후보 스캔: 하한을 넘는 전 종목 확인 (15×20=300 ≥ KRW 270) — v2.0
+    assert C.UNIVERSE_TOP_N * C.SPREAD_CANDIDATE_MULT >= 270
     assert C.VERIFY_SPREAD_ON_ENTRY is True
     # 동시 보유 한도는 그대로 — 풀이 커져도 리스크 노출은 자본이 제한한다
     assert C.MAX_CONCURRENT_POSITIONS == 3
