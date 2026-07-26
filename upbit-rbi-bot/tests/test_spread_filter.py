@@ -184,7 +184,11 @@ def test_안정성_기준값():
 
 
 def test_측정근거_블랙리스트():
-    """8회 샘플링으로 비용 초과가 확인된 종목은 동적 필터를 기다리지 않고 즉시 차단한다."""
-    assert {"LPT", "ICP", "AXS"} <= C.UNIVERSE_BLACKLIST
+    """
+    차단 사유가 두 종류다:
+    - 비용 초과(스프레드 중앙값 > 0.1%): LPT·ICP·AXS
+    - 신호 부적합(스프레드는 통과하나 2년 백테스트 음의 기댓값): KAITO
+    """
+    assert {"LPT", "ICP", "AXS", "KAITO"} <= C.UNIVERSE_BLACKLIST
     s = Screener()
     assert "LPT" in s.exclude        # 스크리너 제외 집합에 반영
