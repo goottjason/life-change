@@ -109,9 +109,12 @@ def test_15분봉_전용종목은_완화상한과_5분금지가_짝을_이룬다
 
 
 # ── v2.1: 검증된 종목만 거래 (§3.2-i, 헌장 §0.3) ─────────────
-def test_미검증_종목은_유니버스에_들어오지_않는다():
-    """스프레드가 좁아도 개별 검증을 통과하지 않으면 거래하지 않는다(KAITO 사례)."""
-    from data.screener import Screener, select_universe
+def test_검증필터_스위치가_동작한다(monkeypatch):
+    """
+    v2.2에서 운영자 결정으로 미검증 종목을 허용(REQUIRE_VALIDATED_MARKET=False)했다.
+    스위치를 켜면 다시 검증 종목만 남는지 확인한다(백로그: 개별 검증 후 재활성 검토).
+    """
+    from data.screener import Screener
 
     class S(Screener):
         def _fetch_tickers(self):
@@ -120,10 +123,14 @@ def test_미검증_종목은_유니버스에_들어오지_않는다():
         def _flagged(self): return set()
         def _apply_history_filter(self, markets): return markets
         def _apply_spread_filter(self, c): return c      # 스프레드는 통과시킴
+
+    monkeypatch.setattr(C, "REQUIRE_VALIDATED_MARKET", False)
+    assert "KRW-NEWCOIN" in S(top_n=5, min_turnover=0).eligible()
+
+    monkeypatch.setattr(C, "REQUIRE_VALIDATED_MARKET", True)
     s = S(top_n=5, min_turnover=0)
     picked = s.eligible()
-    assert "KRW-XRP" in picked
-    assert "KRW-NEWCOIN" not in picked, "미검증 종목이 통과하면 안 됨"
+    assert "KRW-XRP" in picked and "KRW-NEWCOIN" not in picked
     assert s.skipped_unvalidated == 1
 
 

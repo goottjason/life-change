@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
-CHARTER_VERSION = "v2.1"
+CHARTER_VERSION = "v2.2"
 
 # ── 자본·수수료 (헌장 §1, §13) ────────────────────────────────
 # 자본은 더 이상 고정값이 아니라 '실계좌 잔고(총 자산)'를 런타임에 읽어서 쓴다 (헌장 v1.1 §7.1).
@@ -119,7 +119,11 @@ MIN_LISTING_DAYS = 365
 # (KAITO: 스프레드 0.084%인데 5분 −0.065%·15분 −0.000%), **개별 백테스트를 통과한 종목만**
 # 거래한다. 새 종목을 추가하려면 `backtesting/research/lab_universe.py` 로 검증한 뒤 등록한다.
 # 값 = 그 종목에 허용하는 스프레드 상한(검증에 사용한 보수적 스프레드 이상으로는 두지 않는다).
-REQUIRE_VALIDATED_MARKET = True
+# v2.2 (운영자 결정): 미검증 종목도 **허용**한다. 비용 필터(스프레드·잔량·안정성·경고/주의)와
+# 블랙리스트는 그대로 작동하므로 보호는 유지되지만, KAITO 처럼 '스프레드는 좁은데 신호가
+# 안 먹히는 종목'이 섞일 수 있다 — 백로그의 개별 검증으로 확인해 블랙리스트에 추가한다.
+# 검증 완료 종목 목록(VALIDATED_MARKETS)은 스프레드 상한 완화 근거로 계속 쓰인다.
+REQUIRE_VALIDATED_MARKET = False
 VALIDATED_MARKETS: dict[str, float] = {
     # 5분봉·15분봉 모두 양수 (검증 스프레드 ≤0.1%)
     "BTC": 0.001, "ETH": 0.001, "XRP": 0.001, "SOL": 0.001,
