@@ -221,8 +221,10 @@ class Trader:
                     if sig.action == Action.EXIT:
                         reason = ExitReason.REVERSE_SIGNAL
             if reason != ExitReason.NONE:
+                # note 는 '추가 설명'만 담는다. 청산 종류(reason.value)를 여기 다시 넣으면
+                # 로그에 "take_profit:take_profit" 처럼 중복 기록된다.
                 self._close(pos, price, reason,
-                            note=why if reason == ExitReason.DEAD_POSITION else reason.value)
+                            note=why if reason == ExitReason.DEAD_POSITION else "")
 
         # 2~3. 진입: 레짐 활성 전략만 (§8) + 리스크 통과(§5) + 사이징(§7)
         for name, strat in self.strategies.items():
@@ -312,7 +314,7 @@ class Trader:
         self.positions.pop(pos.key, None)
         self.logger.log("exit", strategy=pos.strategy, market=pos.market,
                         price=fill_price, volume=filled, pnl_krw=pnl,
-                        reason=f"{reason.value}:{note}")
+                        reason=f"{reason.value}:{note}" if note else reason.value)
         # 서킷 브레이커 발동 알림
         ok, why = self.risk.can_enter()
         if not ok:

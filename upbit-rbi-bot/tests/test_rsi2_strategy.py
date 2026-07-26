@@ -58,7 +58,9 @@ def test_진입_세조건_모두_충족시_매수(strat):
     df = dumping_df()
     sig = strat.signal(df, {"trend_up": True})
     assert sig.action == Action.ENTER_LONG
-    assert "rsi2" in sig.reason
+    # 사유 문구는 대시보드에 그대로 노출되므로 사람이 읽을 수 있어야 한다
+    assert "과매도" in sig.reason and "상승추세" in sig.reason and "변동성" in sig.reason
+    assert sig.meta["rsi2"] <= 3 and sig.meta["trend_up"] is True
 
 
 def test_하락추세면_진입금지(strat):

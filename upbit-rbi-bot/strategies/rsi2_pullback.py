@@ -63,11 +63,11 @@ class Rsi2PullbackStrategy(BaseStrategy):
         # 청산 판정을 먼저 하지 않는다: 진입 조건과 청산 조건은 겹치지 않으므로 순서 무관.
         if rsi2 >= EXIT_LEVEL:
             return Signal(Action.EXIT, self.name,
-                          f"rsi2 {rsi2:.1f} >= {EXIT_LEVEL:.0f} 되돌림 완료", meta)
+                          f"되돌림 완료 (RSI2 {rsi2:.1f} ≥ {EXIT_LEVEL:.0f})", meta)
 
         if rsi2 > ENTRY_LEVEL:
             return Signal(Action.HOLD, self.name,
-                          f"rsi2 {rsi2:.1f} (진입 {ENTRY_LEVEL:.0f} 이하 대기)", meta)
+                          f"과매도 대기 (RSI2 {rsi2:.1f}, 진입선 {ENTRY_LEVEL:.0f} 이하)", meta)
 
         if trend_up is None:
             return Signal(Action.HOLD, self.name, "추세 판정 불가(1시간봉 미확보) — 진입 보류", meta)
@@ -81,7 +81,8 @@ class Rsi2PullbackStrategy(BaseStrategy):
                           f"변동성 부족 atr {atr_ratio:.3%} < {gate:.1%} (수수료 못 넘김)", meta)
 
         return Signal(Action.ENTER_LONG, self.name,
-                      f"rsi2 {rsi2:.1f}<={ENTRY_LEVEL:.0f} · 추세상승 · atr {atr_ratio:.2%}", meta)
+                      f"과매도 RSI2 {rsi2:.1f} · 1시간봉 상승추세 · 변동성 {atr_ratio:.2%}"
+                      f"(게이트 {gate:.1%})", meta)
 
     # ── 내부 ────────────────────────────────────────────────
     @staticmethod

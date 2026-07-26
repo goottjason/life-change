@@ -45,8 +45,7 @@
     color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;
     display:flex;justify-content:space-between;align-items:center}
   table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
-  th,td{text-align:right;padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
-  th:first-child,td:first-child{text-align:left}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
   th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase}
   tbody tr:last-child td{border-bottom:none}
   td.pos{color:var(--up)} td.neg{color:var(--down)}
@@ -123,7 +122,7 @@
   <div class="card" style="margin-top:16px">
     <h2>체결 내역 (진입 → 청산)</h2>
     <div class="scroll"><table id="rttbl">
-      <thead><tr><th>청산시각(KST)</th><th>전략</th><th>마켓</th><th>진입가</th><th>청산가</th><th>보유</th><th>손익</th><th>신호/청산 사유</th></tr></thead>
+      <thead><tr><th>청산시각(KST)</th><th>전략</th><th>마켓</th><th>투입 → 회수</th><th>손익</th><th>손익률</th><th>진입가 → 청산가</th><th>보유</th><th>진입 이유 / 청산 사유</th></tr></thead>
       <tbody></tbody>
     </table></div>
     <div class="empty" id="rtempty">완료된 체결 없음</div>
@@ -138,10 +137,14 @@
     <div class="empty" id="tradeempty">거래 기록 없음</div>
   </div>
 
+  <div class="card" style="margin-top:16px">
+    <h2>이 봇이 어떻게 매매하는지 — 처음 보시는 분을 위한 안내</h2>
+    <div id="guide" style="padding:4px 14px 14px;font-size:13px;line-height:1.85;color:var(--fg)"></div>
+  </div>
+
   <div class="foot" id="foot">
-    <span id="footRule">헌장 —</span> · 자본=계좌 잔고 연동 · <b>RSI(2)≤3 + 1시간봉 EMA200 위 + 변동성 게이트</b> 진입 / RSI(2)≥70·±손절·8시간 청산<br>
-    거래 종목은 <b>호가 스프레드 ≤0.10% + 상장 1년 이상</b>만 (저가 코인은 호가 왕복비용이 기댓값을 초과) · 왕복 수수료 0.1% + 스프레드 반영<br>
-    ⚠️ 변동성이 낮은 국면에서는 <b>거래가 없는 것이 정상</b>입니다(게이트 미충족). 실투자 손실 위험이 있습니다. 자동 갱신 5초.
+    <span id="footRule">헌장 —</span> · 왕복 수수료 0.1% + 호가 스프레드까지 비용으로 계산 · 자동 갱신 5초<br>
+    ⚠️ 실제 자금이 투입되는 자동매매입니다. 백테스트 성적은 미래를 보장하지 않으며 손실 위험이 있습니다.
   </div>
 </div>
 
@@ -171,7 +174,7 @@ async function refresh(){
       fetch(BASE+"/api/expectations").then(r=>r.json()),
     ]);
     renderStatus(st); renderTrades(tr); renderStats(sta, ex); renderRoundTrips(rt);
-    renderSignals(st); renderUniverse(st); renderExpect(ex);
+    renderSignals(st); renderUniverse(st); renderExpect(ex); renderGuide(st);
   }catch(e){
     document.getElementById("running").textContent = "연결 실패";
   }
@@ -247,7 +250,7 @@ function renderSignals(s){
         <td class="${rsiOk?'pos':''}">${d.rsi2!=null?d.rsi2.toFixed(1):"—"} ${rsiOk?"✅":""}</td>
         <td class="${atrOk?'pos':(atrOk===false?'neg':'')}">${atr} <span style="color:var(--muted)">/ ${gate}</span> ${atrOk?"✅":(atrOk===false?"❌":"")}</td>
         <td>${trend}</td>
-        <td style="text-align:left;color:${enter?'var(--pos)':'var(--muted)'}">${enter?"🟢 진입 신호":d.reason||""}</td>
+        <td style="color:${enter?'var(--pos)':'var(--muted)'}">${enter?"🟢 진입 신호":d.reason||""}</td>
       </tr>`);
     }
   }
@@ -276,10 +279,66 @@ function renderUniverse(s){
     <td>${(s.prices||{})[r.m]!=null?Math.round(s.prices[r.m]).toLocaleString()+"원":"—"}</td>
     <td class="${r.klass}">${r.sp!=null?r.sp.toFixed(3)+"%":"—"}</td>
     <td>${r.cost!=null?r.cost.toFixed(3)+"%":"—"}</td>
-    <td style="text-align:left">${r.state}</td></tr>`).join("");
+    <td>${r.state}</td></tr>`).join("");
   const has=rows.length;
   document.getElementById("uniempty").style.display = has?"none":"block";
   document.querySelector("#unitbl").style.display = has?"table":"none";
+}
+
+// 초보자 가이드 — 실제 계좌 숫자로 채워서 보여준다
+function renderGuide(s){
+  const r = s.risk || {};
+  const eq = r.equity || 0;
+  const risk = r.max_loss_per_trade || 0;          // 자본 1%
+  const daily = r.daily_loss_limit || 0;           // 자본 3%
+  const sl5 = 2.5, sl15 = 3.0;                     // 전략별 손절 폭(%)
+  const alloc = Math.floor(eq/3);                  // 전략당 배분 상한 (자본÷3)
+  const raw5 = risk>0 ? Math.floor(risk/(sl5/100)) : 0;
+  const size5 = Math.min(raw5, alloc);
+  const w = n => Math.round(n).toLocaleString("ko-KR")+"원";
+  document.getElementById("guide").innerHTML = `
+  <b>1. 어떤 종목을 사나요?</b><br>
+  업비트 원화 마켓 전체(약 270개)에서 <b>세 관문</b>을 통과한 종목만 후보가 됩니다.
+  ① 24시간 거래대금 상위 ② <b>호가 스프레드 0.10% 이하</b> ③ <b>상장 1년 이상</b>.
+  ②가 필요한 이유: 가격이 낮은 코인은 호가 한 칸이 이미 0.5~1%여서, 사고파는 것만으로
+  수익보다 큰 비용을 냅니다(예: DOGE 왕복 0.93%). ③은 상장 당일 코인처럼 검증되지 않은
+  종목을 걸러냅니다. 현재 통과 종목은 위 <b>유니버스</b> 표에 있습니다.<br><br>
+
+  <b>2. 언제 사나요? — 세 조건이 동시에 맞을 때만</b><br>
+  ① <b>RSI(2) ≤ 3</b> : 최근 10분이 거의 전부 하락한 극단적 과매도 상태<br>
+  ② <b>1시간봉이 EMA200 위</b> : 큰 흐름은 상승 (하락 추세의 급락은 사지 않습니다)<br>
+  ③ <b>변동성(ATR) ≥ 0.6%</b>(5분봉) / <b>≥ 1.0%</b>(15분봉) : 움직임이 수수료보다 충분히 클 때만<br>
+  → 한마디로 <b>"오르는 중인 코인이 잠깐 급하게 밀렸을 때 산다"</b> 입니다.
+  세 조건이 모두 맞는 순간은 드물기 때문에 <b>하루 1회 정도</b>, 조용한 장에서는 <b>며칠간 0회</b>도 정상입니다.
+  지금 무엇에 막혀 있는지는 위 <b>진입 진단</b> 표에서 볼 수 있습니다.<br><br>
+
+  <b>3. 얼마를 넣나요? — 현재 계좌 ${w(eq)} 기준</b><br>
+  "한 번 틀렸을 때 잃을 금액"을 먼저 정하고 거기서 거꾸로 계산합니다.<br>
+  · 1거래 최대 손실 = 자본의 <b>1% = ${w(risk)}</b><br>
+  · 손절 폭이 2.5%이므로 → ${w(risk)} ÷ 2.5% = <b>${w(raw5)}</b> 까지 살 수 있지만,<br>
+  · 한 전략이 자본의 1/3(<b>${w(alloc)}</b>)을 넘지 못하게 제한 → 실제 진입 금액 <b>약 ${w(size5)}</b>
+    (계좌의 <b>${eq? (size5/eq*100).toFixed(0):0}%</b>)<br>
+  · 동시 최대 <b>3개 종목</b>까지 보유 → 최대 노출은 계좌의 100%<br>
+  즉 <b>한 번의 실패로 잃는 돈은 계좌의 1% 수준</b>으로 묶어 둡니다.<br><br>
+
+  <b>4. 언제 파나요? — 먼저 오는 조건에서</b><br>
+  🎯 <b>익절</b> +2.5%(5분봉)/+3.0%(15분봉) 도달 · 🛑 <b>손절</b> 같은 폭의 반대 방향 ·
+  ↩️ <b>되돌림 완료</b> RSI(2) ≥ 70 (원래 목적 달성, 실제로 가장 많은 청산 경로) ·
+  ⏱ <b>시간 손절</b> 8시간 지나도 결판이 안 나면 회수해 다음 기회에 씁니다.<br>
+  10초마다 가격을 확인하므로, 급등하는 코인은 목표가를 넘겨 더 좋게 팔릴 수도 있고
+  급락 시 손절선보다 조금 나쁘게 팔릴 수도 있습니다.<br><br>
+
+  <b>5. 자동 안전장치</b><br>
+  하루 손실이 <b>${w(daily)}</b>(자본 3%)에 닿으면 그날 신규 진입 중단 ·
+  <b>연속 5회</b> 손절 시 일시정지 · 고점 대비 <b>−15%</b>면 전면 정지 ·
+  언제든 우측 상단 <b>🛑 KILL</b> 로 전량 청산+정지.<br><br>
+
+  <b>6. 기대치를 현실적으로</b><br>
+  2년 데이터 검증 결과는 <b>승률 약 70%, 거래당 +0.26%</b> 입니다. 거래 한 건당 손익은
+  ${w(size5)} × 0.26% ≈ <b>${w(size5*0.0026)}</b> 수준이고, 좋은 국면에 하루 1~2회 거래됩니다.
+  한 번 크게 버는 방식이 아니라 <b>작은 우위를 여러 번 반복</b>하는 방식입니다.
+  <span style="color:var(--muted)">개별 거래는 이보다 크게 벌거나 잃을 수 있습니다(변동성 때문).
+  표본이 쌓이기 전의 성과는 운의 영향이 큽니다.</span>`;
 }
 
 // 백테스트 기대치 (실전 대조용)
@@ -316,30 +375,53 @@ function renderTrades(list){
     <td>${fmt(t.ts)}</td><td>${badge(t.event)}</td><td>${(t.strategy||"").toUpperCase()}</td>
     <td>${t.market||""}</td><td>${t.price?Math.round(t.price).toLocaleString():""}</td>
     <td class="${cls(t.pnl_krw)}">${t.event==="exit"?won(t.pnl_krw):""}</td>
-    <td style="text-align:left;color:var(--muted)">${t.reason||""}</td></tr>`).join("");
+    <td style="color:var(--muted)">${t.event==="exit"?exitKo(t.reason):(t.reason||"")}</td></tr>`).join("");
   document.getElementById("tradeempty").style.display = list.length?"none":"block";
   document.querySelector("#tradetbl").style.display = list.length?"table":"none";
 }
 
+// 청산 사유를 한글로 (로그 원문은 그대로 두고 표시만 바꾼다)
+const EXIT_KO = {
+  take_profit: "🎯 익절 (목표가 도달)",
+  stop_loss:   "🛑 손절 (손실 제한)",
+  reverse:     "↩️ 되돌림 완료 (신호 청산)",
+  dead:        "⏱ 시간 손절 (기다려도 안 와서 회수)",
+  kill_switch: "⚠️ 강제 청산 (킬 스위치)",
+  eod:         "구간 종료",
+};
+function exitKo(raw){
+  if(!raw) return "";
+  const [kind, ...rest] = String(raw).split(":");
+  const ko = EXIT_KO[kind] || kind;
+  let extra = rest.join(":").trim();
+  if(extra === kind) extra = "";        // 과거 로그의 "take_profit:take_profit" 중복 제거
+  return extra ? `${ko} — ${extra}` : ko;
+}
+
 function renderRoundTrips(list){
   const tb=document.querySelector("#rttbl tbody");
-  tb.innerHTML = (list||[]).map(t=>`<tr>
+  tb.innerHTML = (list||[]).map(t=>{
+    const inv = t.size_krw, pnl = t.pnl_krw;
+    const back = (inv!=null && pnl!=null) ? inv + pnl : null;
+    const rate = (inv && pnl!=null) ? pnl/inv*100 : null;
+    return `<tr>
     <td>${fmt(t.exit_ts)}</td>
-    <td>${(t.strategy||"").toUpperCase()}</td>
-    <td>${t.market||""}</td>
-    <td>${t.entry_price!=null?Math.round(t.entry_price).toLocaleString():"—"}</td>
-    <td>${t.exit_price!=null?Math.round(t.exit_price).toLocaleString():"—"}</td>
+    <td>${t.strategy||""}</td>
+    <td><b>${(t.market||"").replace("KRW-","")}</b></td>
+    <td>${inv!=null?won0(inv):"—"} <span style="color:var(--muted)">→</span> ${back!=null?won0(back):"—"}</td>
+    <td class="${cls(pnl)}"><b>${pnl!=null?won(pnl):""}</b></td>
+    <td class="${cls(rate)}">${rate!=null?pct(rate):"—"}</td>
+    <td style="color:var(--muted)">${t.entry_price!=null?Math.round(t.entry_price).toLocaleString():"—"} → ${t.exit_price!=null?Math.round(t.exit_price).toLocaleString():"—"}</td>
     <td>${hold(t.hold_sec)}</td>
-    <td class="${cls(t.pnl_krw)}">${t.pnl_krw!=null?won(t.pnl_krw):""}</td>
-    <td style="text-align:left;color:var(--muted)">${reasonPair(t)}</td></tr>`).join("");
+    <td style="color:var(--muted)">${reasonPair(t)}</td></tr>`;
+  }).join("");
   const has=(list||[]).length;
   document.getElementById("rtempty").style.display = has?"none":"block";
   document.querySelector("#rttbl").style.display = has?"table":"none";
 }
 const reasonPair=t=>{
-  const inr=(t.entry_reason||"").toString().slice(0,40);
-  const outr=(t.exit_reason||"").toString().slice(0,40);
-  return `${inr?"↳ "+inr+"<br>":""}⤴ ${outr||"—"}`;
+  const inr=(t.entry_reason||"").toString();
+  return `${inr?"↳ "+inr+"<br>":""}⤴ ${exitKo(t.exit_reason)||"—"}`;
 };
 const hold=s=>{
   if(s==null) return "—";
