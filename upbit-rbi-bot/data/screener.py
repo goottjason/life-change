@@ -42,7 +42,7 @@ def select_universe(tickers: list[dict], top_n: int,
 class Screener:
     def __init__(self, fallback=None, top_n=None, min_turnover=None,
                  refresh_sec=None, exclude=None):
-        self.fallback = list(fallback or settings.universe)
+        self.fallback = list(fallback if fallback is not None else settings.universe)
         self.top_n = top_n if top_n is not None else C.UNIVERSE_TOP_N
         self.min_turnover = min_turnover if min_turnover is not None else C.MIN_TURNOVER_24H_KRW
         self.refresh_sec = refresh_sec if refresh_sec is not None else C.UNIVERSE_REFRESH_SEC
@@ -68,10 +68,13 @@ class Screener:
     def _fetch_tickers(self) -> list[dict]:
         if requests is None:
             raise RuntimeError("requests 미설치")
-        markets = requests.get(UPBIT_MARKET_ALL,
-                               params={"isDetails": "false"}, timeout=5).json()
+        r1 = requests.get(UPBIT_MARKET_ALL,
+                          params={"isDetails": "false"}, timeout=5)
+        r1.raise_for_status()
+        markets = r1.json()
         krw = [m["market"] for m in markets
                if str(m.get("market", "")).startswith("KRW-")]
-        resp = requests.get(UPBIT_TICKER,
-                            params={"markets": ",".join(krw)}, timeout=5).json()
-        return resp
+        r2 = requests.get(UPBIT_TICKER,
+                          params={"markets": ",".join(krw)}, timeout=5)
+        r2.raise_for_status()
+        return r2.json()
