@@ -27,3 +27,15 @@ def test_available_krw_caps_size():
 def test_zero_or_negative_stop_ratio_returns_zero():
     assert C.position_size_krw(0.0, 90_000) == 0.0
     assert C.position_size_krw(-0.01, 90_000) == 0.0
+
+
+def test_stop_ratio_from_atr_normal():
+    assert C.stop_ratio_from_atr(1.5, 2.0, 100.0) == 0.03
+
+
+def test_stop_ratio_from_atr_fallback_when_atr_non_positive():
+    assert C.stop_ratio_from_atr(1.5, 0.0, 100.0) == C.FALLBACK_STOP_RATIO
+
+
+def test_stop_ratio_from_atr_fallback_when_price_non_positive():
+    assert C.stop_ratio_from_atr(1.5, 2.0, 0.0) == C.FALLBACK_STOP_RATIO

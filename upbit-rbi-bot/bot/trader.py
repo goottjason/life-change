@@ -160,10 +160,7 @@ class Trader:
     def _open(self, name: str, strat: BaseStrategy, market: str,
               price: float, df: pd.DataFrame) -> None:
         entry_atr = float(ta.atr(df).iloc[-1]) if len(df) >= 14 else 0.0
-        if price > 0 and entry_atr > 0:
-            stop_ratio = strat.spec.atr_stop_mult * entry_atr / price
-        else:
-            stop_ratio = C.FALLBACK_STOP_RATIO
+        stop_ratio = C.stop_ratio_from_atr(strat.spec.atr_stop_mult, entry_atr, price)
         krw = self.risk.size_for(stop_ratio)                # §7.2 (ATR 정규화 v1.2)
         # 잔고 부족 등으로 주문금액이 최소주문금액 미만이면 조용히 스킵(로그 스팸 방지)
         if krw < C.MIN_ORDER_KRW:

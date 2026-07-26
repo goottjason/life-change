@@ -108,3 +108,10 @@ def position_size_krw(stop_ratio: float, capital: float,
 
 # ── ATR 사이징 폴백 (헌장 §7, v1.2) ──────────────────────────
 FALLBACK_STOP_RATIO = 0.03   # entry_atr 없을 때(봉 부족/복원) SL 거리 기본값
+
+
+def stop_ratio_from_atr(atr_stop_mult: float, entry_atr: float, entry_price: float) -> float:
+    """손절거리비율 = k×ATR/진입가 (§7). ATR/가격이 유효하지 않으면 FALLBACK_STOP_RATIO."""
+    if entry_price > 0 and entry_atr > 0:
+        return atr_stop_mult * entry_atr / entry_price
+    return FALLBACK_STOP_RATIO

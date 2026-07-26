@@ -33,12 +33,9 @@ class Position:
     tp_ratio: float = field(init=False)   # 익절거리비율
 
     def __post_init__(self):
-        from config.charter import FALLBACK_STOP_RATIO
+        from config.charter import stop_ratio_from_atr
         self.highest_price = self.entry_price
-        if self.entry_price > 0 and self.entry_atr > 0:
-            stop = self.spec.atr_stop_mult * self.entry_atr / self.entry_price
-        else:
-            stop = FALLBACK_STOP_RATIO
+        stop = stop_ratio_from_atr(self.spec.atr_stop_mult, self.entry_atr, self.entry_price)
         self.sl_ratio = stop
         self.tp_ratio = self.spec.rr * stop
 
