@@ -82,6 +82,23 @@ def filter_by_spread(books: list[dict], max_spread: float,
     return passed, measured
 
 
+def flagged_markets(markets_detail: list[dict]) -> set[str]:
+    """
+    투자경고·투자주의 종목 집합 (§3, v2.0). `market/all?isDetails=true` 응답을 받는다.
+    경고(warning)=상장폐지 검토 등, 주의(caution)=가격급등락·거래량급증·소수계정 집중 등 조작 징후.
+    거래대금 하한이 어설프게 대리하던 위험을 여기서 직접 차단한다.
+    """
+    out: set[str] = set()
+    for m in markets_detail or []:
+        ev = m.get("market_event") or {}
+        if C.EXCLUDE_MARKET_WARNING and ev.get("warning"):
+            out.add(m.get("market", ""))
+            continue
+        if C.EXCLUDE_MARKET_CAUTION and any((ev.get("caution") or {}).values()):
+            out.add(m.get("market", ""))
+    return {m for m in out if m}
+
+
 def select_universe(tickers: list[dict], top_n: int,
                     min_turnover: float, exclude: set[str]) -> list[str]:
     """티커 목록에서 KRW·거래대금 하한·제외 조건을 적용해 거래대금 상위 top_n 마켓 반환."""
@@ -122,6 +139,7 @@ class Screener:
         self.rejected: dict[str, float] = {}     # 스프레드 초과로 탈락한 종목
         self._spread_hist: dict[str, list[float]] = {}   # 종목별 스프레드 관측 이력 (v1.7)
         self.rejected_unstable: list[str] = []   # 스프레드 변동이 큰 종목
+        self.rejected_flagged: list[str] = []    # 투자경고/주의로 제외된 종목
 
     def _notify(self, msg):
         self.notifier.send(msg) if self.notifier else print(msg)
@@ -135,6 +153,14 @@ class Screener:
             candidates = select_universe(self._fetch_tickers(),
                                          self.top_n * C.SPREAD_CANDIDATE_MULT,
                                          self.min_turnover, self.exclude)
+            flagged = self._flagged()                              # 투자경고/주의 (v2.0)
+            if flagged:
+                dropped = [m for m in candidates if m in flagged]
+                if dropped:
+                    self.rejected_flagged = dropped
+                    print("[screener] 투자경고/주의 제외: " + ", ".join(
+                        m.replace("KRW-", "") for m in dropped))
+                candidates = [m for m in candidates if m not in flagged]
             candidates = self._apply_history_filter(candidates)   # 신규 상장 배제 (v1.5)
             picked = self._apply_spread_filter(candidates)[:self.top_n]
         except Exception:
@@ -293,6 +319,20 @@ class Screener:
         r.raise_for_status()
         data = r.json()
         return data if isinstance(data, list) else [data]
+
+    def _flagged(self) -> set[str]:
+        """투자경고/주의 종목. 조회 실패 시 빈 집합(다른 필터가 계속 작동한다)."""
+        try:
+            return flagged_markets(self._fetch_markets_detail())
+        except Exception:
+            return set()
+
+    def _fetch_markets_detail(self) -> list[dict]:
+        if requests is None:
+            raise RuntimeError("requests 미설치")
+        r = requests.get(UPBIT_MARKET_ALL, params={"isDetails": "true"}, timeout=5)
+        r.raise_for_status()
+        return r.json()
 
     def _fetch_tickers(self) -> list[dict]:
         if requests is None:

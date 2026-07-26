@@ -192,3 +192,30 @@ def test_측정근거_블랙리스트():
     assert {"LPT", "ICP", "AXS", "KAITO"} <= C.UNIVERSE_BLACKLIST
     s = Screener()
     assert "LPT" in s.exclude        # 스크리너 제외 집합에 반영
+
+
+# ── v2.0: 투자경고/주의 제외 + 거래대금 하한 완화 ──────────
+def test_투자경고_주의_종목_제외():
+    """거래대금 하한이 어설프게 대리하던 위험(조작·급등락)을 플래그로 직접 차단한다."""
+    from data.screener import flagged_markets
+    detail = [
+        {"market": "KRW-BTC", "market_event": {"warning": False, "caution": {}}},
+        {"market": "KRW-WARN", "market_event": {"warning": True, "caution": {}}},
+        {"market": "KRW-CAUT", "market_event": {"warning": False,
+                                                "caution": {"PRICE_FLUCTUATIONS": True}}},
+    ]
+    assert flagged_markets(detail) == {"KRW-WARN", "KRW-CAUT"}
+
+
+def test_플래그_조회실패는_다른_필터를_막지_않는다():
+    class S(FakeScreener):
+        def _fetch_markets_detail(self):
+            raise RuntimeError("down")
+    s = S(TICKERS, BOOKS, top_n=3, min_turnover=0)
+    assert s.eligible() == ["KRW-BTC", "KRW-ETH", "KRW-XRP"]
+
+
+def test_거래대금_하한_완화값():
+    """30억·100억은 근거 없는 값이었다. 실측 통과: 30억 7개 → 1억 18개."""
+    assert C.MIN_TURNOVER_24H_KRW == 100_000_000
+    assert C.EXCLUDE_MARKET_WARNING and C.EXCLUDE_MARKET_CAUTION
