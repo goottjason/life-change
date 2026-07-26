@@ -260,6 +260,16 @@ class Trader:
         if not (entry_atr > 0):
             self.logger.log("entry_fail", strategy=name, market=market, reason="no atr")
             return
+        # 주문 직전 스프레드 재확인 (§6, v1.6). 유니버스는 10분 주기로 갱신되므로
+        # 스크리닝 시점의 스프레드가 최신이 아니다. 넓어졌으면 진입하지 않는다
+        # (거래당 기댓값이 0.26% 수준이라 스프레드 0.1%p 차이가 손익을 가른다).
+        if C.VERIFY_SPREAD_ON_ENTRY:
+            ok, why = self.screener.tradable_now(market)
+            if not ok:
+                self.logger.log("entry_skip", strategy=name, market=market,
+                                reason=f"진입 취소: {why}")
+                return
+
         # 고정 손절(spec.stop_pct)이 있으면 그 값, 없으면 ATR 정규화 (§7, v1.3)
         stop_ratio = C.stop_ratio_for(strat.spec, entry_atr, price)
         krw = self.risk.size_for(stop_ratio)                # §7.2 (ATR 정규화 v1.2)

@@ -13,6 +13,12 @@ from data.upbit_client import OrderResult
 from indicators import ta
 
 
+class _PassScreener:
+    """진입 직전 스프레드 확인(v1.6)을 통과시키는 스텁."""
+    spreads = {}
+    def tradable_now(self, market): return True, "스프레드 0.050%"
+
+
 class _Null:
     def send(self, msg): pass
 
@@ -42,6 +48,7 @@ def test_open_uses_atr_sizing_and_sets_ratios():
             captured["krw"] = krw
             return OrderResult(ok=True, filled_volume=krw / price, avg_price=price)
     t.orders = Orders()
+    t.screener = _PassScreener()
 
     df = _df()
     price = float(df["close"].iloc[-1])
@@ -69,6 +76,7 @@ def test_open_skips_when_no_atr():
         def enter_long(self, *a, **k):
             raise AssertionError("ATR 없으면 진입하면 안 됨")
     t.orders = Orders()
+    t.screener = _PassScreener()
 
     short_df = _df().iloc[:5]   # 14봉 미만 → ATR 불가
     strat = build_strategies(("macd",))["macd"]   # v1.3: 기본 가동목록에 없어 명시 생성

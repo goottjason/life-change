@@ -224,6 +224,32 @@ class Screener:
                   f"{self.max_spread:.2%}): {detail}")
         return ordered
 
+    # ── 진입 직전 스프레드 재확인 (§6, v1.6) ─────────────────
+    def spread_now(self, market: str) -> float | None:
+        """해당 종목의 현재 스프레드. 조회 실패 시 None."""
+        try:
+            books = self._fetch_orderbooks([market])
+        except Exception:
+            return None
+        for b in books or []:
+            if b.get("market") == market and b.get("orderbook_units"):
+                return spread_ratio(b["orderbook_units"][0])
+        return None
+
+    def tradable_now(self, market: str) -> tuple[bool, str]:
+        """
+        주문 직전 호출용. 스프레드가 상한 이내인지 지금 다시 확인한다.
+        유니버스는 10분 주기로 갱신되므로 스크리닝 시점 값은 최신이 아니다.
+        조회 실패는 '확인 불가 → 진입 금지'로 처리한다(미확인 비용으로 실거래 금지).
+        """
+        s = self.spread_now(market)
+        if s is None:
+            return False, "스프레드 확인 실패"
+        self.spreads[market] = s
+        if s > self.max_spread:
+            return False, f"스프레드 {s:.3%} > 상한 {self.max_spread:.2%}"
+        return True, f"스프레드 {s:.3%}"
+
     def _fetch_orderbooks(self, markets: list[str]) -> list[dict]:
         if requests is None:
             raise RuntimeError("requests 미설치")

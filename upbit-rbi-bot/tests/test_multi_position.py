@@ -68,6 +68,11 @@ def bare_trader(strategies=("rsi2", "rsi2_15m")):
             return OrderResult(ok=True, filled_volume=pos.volume, avg_price=price)
     t.orders = Orders()
     t._trend_ctx = lambda market: {"trend_up": True}      # 추세 통과로 고정
+
+    class Scr:   # 진입 직전 스프레드 확인(v1.6) 통과 스텁
+        spreads = {}
+        def tradable_now(self, market): return True, "스프레드 0.050%"
+    t.screener = Scr()
     return t
 
 

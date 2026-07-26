@@ -29,9 +29,14 @@ SPECS_LAB = [
 # 단타 엣지의 통계적 입증에는 표본이 더 필요하다(거래 240건+ 필요, 208일로는 부족)
 SPECS_LAB2 = [("minute5", 210_000)]     # ≈2년
 
+# 유니버스 확대 검증용 중형 종목 (스프레드 ≤0.1% 통과했으나 아직 검증 안 된 종목들)
+MARKETS_MID = ["KRW-LPT", "KRW-SUI", "KRW-ATOM", "KRW-ENS", "KRW-AXS", "KRW-ICP",
+               "KRW-GAS", "KRW-KAITO"]
+SPECS_MID = [("minute5", 210_000)]
+
 
 def specs_for(mode: str):
-    return {"lab": SPECS_LAB, "lab2": SPECS_LAB2}.get(mode, SPECS)
+    return {"lab": SPECS_LAB, "lab2": SPECS_LAB2, "mid": SPECS_MID}.get(mode, SPECS)
 
 # (interval, 봉수) — 봉수 × 봉길이 ≈ 커버 기간
 SPECS = [
@@ -69,7 +74,8 @@ def main(force: bool = False, mode: str = "") -> None:
     """mode='lab'(208일 5분봉·12종목) / 'lab2'(2년 5분봉) / 기본(장기 다중 TF)."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     specs = specs_for(mode)
-    markets = MARKETS_LAB if mode.startswith("lab") else MARKETS
+    markets = (MARKETS_MID if mode == "mid"
+               else MARKETS_LAB if mode.startswith("lab") else MARKETS)
     for interval, count in specs:
         for market in markets:
             p = path_for(market, interval)
@@ -96,5 +102,5 @@ def main(force: bool = False, mode: str = "") -> None:
 
 
 if __name__ == "__main__":
-    mode = "lab2" if "lab2" in sys.argv else ("lab" if "lab" in sys.argv else "")
+    mode = next((m for m in ("lab2", "lab", "mid") if m in sys.argv), "")
     main(force="--force" in sys.argv, mode=mode)
