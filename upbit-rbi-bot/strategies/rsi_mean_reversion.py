@@ -12,7 +12,7 @@ class RsiMeanReversionStrategy(BaseStrategy):
     OVERSOLD = 30
     EXIT_LEVEL = 50
 
-    def signal(self, df: pd.DataFrame) -> Signal:
+    def signal(self, df: pd.DataFrame, ctx: dict | None = None) -> Signal:
         if len(df) < self.PERIOD + 2:
             return Signal(Action.HOLD, self.name, "insufficient bars")
         r = ta.rsi(df["close"], self.PERIOD)

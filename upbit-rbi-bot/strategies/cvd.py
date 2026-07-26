@@ -10,7 +10,7 @@ from strategies.base import BaseStrategy, Signal, Action
 class CvdStrategy(BaseStrategy):
     LOOKBACK = 5  # 다이버전스 확인 구간(봉)
 
-    def signal(self, df: pd.DataFrame) -> Signal:
+    def signal(self, df: pd.DataFrame, ctx: dict | None = None) -> Signal:
         if len(df) < self.LOOKBACK + 2:
             return Signal(Action.HOLD, self.name, "insufficient bars")
         c = ta.cvd(df)

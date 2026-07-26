@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 
 import pandas as pd
 
-from config.settings import settings
+from config.settings import settings, forced_paper_reason
 from config import charter as C
 from config.charter import STRATEGY_SPECS
 from config.timeutil import now_kst
@@ -28,6 +28,7 @@ from strategies.base import BaseStrategy, Action
 from strategies.macd import MacdStrategy
 from strategies.rsi_mean_reversion import RsiMeanReversionStrategy
 from strategies.cvd import CvdStrategy
+from strategies.rsi2_pullback import Rsi2PullbackStrategy, trend_up_from_hourly
 from strategies.regime import detect_regime, is_strategy_active
 from indicators import ta
 from safety.failsafe import Failsafe
@@ -35,12 +36,23 @@ from safety.notifier import TelegramNotifier
 from incubation.logger import TradeLogger
 
 
-def build_strategies() -> dict[str, BaseStrategy]:
-    return {
-        "macd": MacdStrategy(STRATEGY_SPECS["macd"]),
-        "rsi": RsiMeanReversionStrategy(STRATEGY_SPECS["rsi"]),
-        "cvd": CvdStrategy(STRATEGY_SPECS["cvd"]),
-    }
+ALL_STRATEGIES = {
+    "macd": MacdStrategy,
+    "rsi": RsiMeanReversionStrategy,
+    "cvd": CvdStrategy,
+    "rsi2": Rsi2PullbackStrategy,
+}
+
+
+def build_strategies(names: tuple[str, ...] | None = None) -> dict[str, BaseStrategy]:
+    """
+    가동 전략 생성. 기본은 헌장 ACTIVE_STRATEGIES (v1.3: rsi2 단독).
+
+    macd/rsi/cvd 는 장기·walk-forward 검증에서 모두 음의 기댓값으로 확인돼 비활성 상태다.
+    클래스는 남겨두므로 재검증 후 ACTIVE_STRATEGIES 에 추가하면 즉시 되살릴 수 있다.
+    """
+    picked = names if names is not None else C.ACTIVE_STRATEGIES
+    return {n: ALL_STRATEGIES[n](STRATEGY_SPECS[n]) for n in picked}
 
 
 class Trader:
@@ -56,12 +68,23 @@ class Trader:
         self.positions: dict[str, Position] = {}   # key: strategy name (전략당 1포지션 §3.4)
         self.last_prices: dict[str, float] = {}    # 대시보드용 최신가 캐시
         self.regimes: dict[str, str] = {}          # 대시보드용 레짐 캐시
+        self.trend_up: dict[str, bool] = {}        # 1시간봉 EMA200 추세 캐시 (rsi2 §2, v1.3)
+        self._trend_at: dict[str, float] = {}      # 종목별 추세 갱신 시각(monotonic)
 
     # ── 부팅 (§9.3 상태 복구) ────────────────────────────────
     def boot(self) -> None:
         settings.validate()
         self._recover_positions()
-        self.notifier.send(f"🤖 봇 시작 (dry_run={settings.dry_run})")
+        forced = forced_paper_reason()
+        strategies = ", ".join(self.strategies)
+        self.notifier.send(
+            f"🤖 봇 시작 · 헌장 {C.CHARTER_VERSION} · 전략 [{strategies}] · "
+            f"dry_run={settings.dry_run}")
+        if forced:
+            self.notifier.send(
+                f"🧪 **모의 모드로 강제됨** — {forced}\n"
+                f"실거래 주문은 전송되지 않습니다. 신호·손익은 그대로 기록되므로 "
+                f"대시보드로 검증할 수 있습니다.")
 
     def _recover_positions(self) -> None:
         """
@@ -126,11 +149,37 @@ class Trader:
                 continue
             self._process_market(market, df)
 
+    # ── 상위 타임프레임 추세 (rsi2 §2, v1.3) ────────────────
+    def _trend_ctx(self, market: str) -> dict:
+        """
+        1시간봉 EMA200 추세를 조회해 캐시한다. 5분봉 200봉으로는 200시간 EMA를 계산할 수 없고
+        매 tick 2400봉을 받으면 API 호출이 12배가 되므로, 1시간봉을 별도로 받아 캐시한다.
+        판정은 '직전에 완성된 1시간봉' 기준이라 1시간에 한 번만 갱신하면 충분하다.
+        """
+        import time as _time
+        last = self._trend_at.get(market, 0.0)
+        if market in self.trend_up and (_time.monotonic() - last) < C.TREND_REFRESH_SEC:
+            return {"trend_up": self.trend_up[market]}
+        try:
+            hourly = self.client.get_candles(market, interval="minute60", count=210)
+            up = trend_up_from_hourly(hourly)
+        except Exception as e:
+            self.failsafe.on_api_error(e)
+            up = None
+        self._trend_at[market] = _time.monotonic()
+        if up is None:
+            # 판정 불가 → 캐시를 지워 '진입 보류'가 되게 한다(추세 확인 없는 진입 금지)
+            self.trend_up.pop(market, None)
+            return {}
+        self.trend_up[market] = up
+        return {"trend_up": up}
+
     def _process_market(self, market: str, df: pd.DataFrame) -> None:
         price = df["close"].iloc[-1]
         regime = detect_regime(df)
         self.last_prices[market] = float(price)     # 대시보드 캐시
         self.regimes[market] = regime.value
+        ctx = self._trend_ctx(market)
 
         # 1. 보유 포지션 청산 판정
         for name, pos in list(self.positions.items()):
@@ -143,7 +192,7 @@ class Trader:
                 if dead:
                     reason = ExitReason.DEAD_POSITION
                 else:
-                    sig = self.strategies[name].signal(df)  # 역방향 (§4.3)
+                    sig = self.strategies[name].signal(df, ctx)  # 역방향 (§4.3)
                     if sig.action == Action.EXIT:
                         reason = ExitReason.REVERSE_SIGNAL
             if reason != ExitReason.NONE:
@@ -153,26 +202,30 @@ class Trader:
         for name, strat in self.strategies.items():
             if name in self.positions:            # 전략당 1포지션 (§3.4)
                 continue
-            if not is_strategy_active(strat.regime, regime):
+            # always_active 전략은 레짐 필터를 통과시킨다 (§8, v1.3):
+            # ADX 레짐 필터는 백테스트에서 기댓값 개선이 확인되지 않았고, rsi2 검증 시에도
+            # 쓰지 않았으므로 적용하면 '검증되지 않은 다른 전략'이 된다.
+            if not strat.spec.always_active and not is_strategy_active(strat.regime, regime):
                 continue
             ok, _ = self.risk.can_enter()
             if not ok:
                 continue
-            sig = strat.signal(df)
+            sig = strat.signal(df, ctx)
             if sig.action != Action.ENTER_LONG:
                 continue
             if self._is_duplicate(market):         # 동일코인 중복 금지 (§3.3)
                 continue
-            self._open(name, strat, market, price, df)
+            self._open(name, strat, market, price, df, note=sig.reason)
 
     # ── 진입/청산 실행 ───────────────────────────────────────
     def _open(self, name: str, strat: BaseStrategy, market: str,
-              price: float, df: pd.DataFrame) -> None:
+              price: float, df: pd.DataFrame, note: str = "") -> None:
         entry_atr = float(ta.atr(df).iloc[-1]) if len(df) >= 14 else 0.0
         if not (entry_atr > 0):
             self.logger.log("entry_fail", strategy=name, market=market, reason="no atr")
             return
-        stop_ratio = C.stop_ratio_from_atr(strat.spec.atr_stop_mult, entry_atr, price)
+        # 고정 손절(spec.stop_pct)이 있으면 그 값, 없으면 ATR 정규화 (§7, v1.3)
+        stop_ratio = C.stop_ratio_for(strat.spec, entry_atr, price)
         krw = self.risk.size_for(stop_ratio)                # §7.2 (ATR 정규화 v1.2)
         # 잔고 부족 등으로 주문금액이 최소주문금액 미만이면 조용히 스킵(로그 스팸 방지)
         if krw < C.MIN_ORDER_KRW:
@@ -189,7 +242,7 @@ class Trader:
         )
         self.risk.on_open()
         self.logger.log("entry", strategy=name, market=market, price=price,
-                        volume=res.filled_volume, size_krw=krw, reason=strat.signal(df).reason)
+                        volume=res.filled_volume, size_krw=krw, reason=note)
 
     def _close(self, pos: Position, price: float, reason: ExitReason, note: str = "") -> None:
         res = self.orders.exit_position(pos, price, reason)    # §6
@@ -271,4 +324,14 @@ class Trader:
             "regimes": dict(self.regimes),
             "prices": {m: round(p) for m, p in self.last_prices.items()},
             "universe": self.screener.eligible(),
+            # v1.3 운영 관찰 항목
+            "charter_version": C.CHARTER_VERSION,
+            "strategies": list(self.strategies),
+            "dry_run": settings.dry_run,
+            "forced_paper": forced_paper_reason(),
+            "trend_up": dict(self.trend_up),        # 1시간봉 EMA200 위 여부 (진입 전제조건)
+            "spreads": {m: round(v * 100, 3) for m, v in
+                        getattr(self.screener, "spreads", {}).items()},
+            "spread_rejected": {m: round(v * 100, 3) for m, v in
+                                getattr(self.screener, "rejected", {}).items()},
         }

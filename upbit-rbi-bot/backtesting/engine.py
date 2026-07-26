@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from config.charter import FEE_ROUNDTRIP, TIME_STOP_BARS, stop_ratio_from_atr
+from config.charter import FEE_ROUNDTRIP, stop_ratio_for, time_stop_bars_for
 from strategies.base import BaseStrategy, Action
 from backtesting.metrics import compute, BacktestResult
 from indicators import ta
@@ -35,7 +35,7 @@ def run(strategy: BaseStrategy, df: pd.DataFrame, warmup: int = 30) -> BacktestR
             sig = strategy.signal(window)
             if sig.action == Action.ENTER_LONG:
                 entry_atr = float(ta.atr(window).iloc[-1]) if len(window) >= 14 else 0.0
-                sl_ratio = stop_ratio_from_atr(spec.atr_stop_mult, entry_atr, price)
+                sl_ratio = stop_ratio_for(spec, entry_atr, price)
                 tp_ratio = spec.rr * sl_ratio
                 in_pos, entry_price, entry_i = True, price, i
             continue
@@ -47,7 +47,7 @@ def run(strategy: BaseStrategy, df: pd.DataFrame, warmup: int = 30) -> BacktestR
             exit_now = True
         elif gross <= -sl_ratio:               # 손절
             exit_now = True
-        elif (i - entry_i) >= TIME_STOP_BARS:  # 시간 손절 (죽은 포지션 대표)
+        elif (i - entry_i) >= time_stop_bars_for(spec):  # 시간 손절 (전략별, v1.3)
             exit_now = True
         else:
             sig = strategy.signal(window)

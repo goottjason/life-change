@@ -33,9 +33,10 @@ class Position:
     tp_ratio: float = field(init=False)   # 익절거리비율
 
     def __post_init__(self):
-        from config.charter import stop_ratio_from_atr
+        from config.charter import stop_ratio_for
         self.highest_price = self.entry_price
-        stop = stop_ratio_from_atr(self.spec.atr_stop_mult, self.entry_atr, self.entry_price)
+        # 전략 스펙에 고정 손절(stop_pct)이 있으면 그 값, 없으면 ATR 정규화 (§7, v1.3)
+        stop = stop_ratio_for(self.spec, self.entry_atr, self.entry_price)
         self.sl_ratio = stop
         self.tp_ratio = self.spec.rr * stop
 

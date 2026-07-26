@@ -8,7 +8,7 @@ from __future__ import annotations
 import pandas as pd
 
 from config.charter import (
-    TIME_STOP_BARS, FLAT_BARS, FLAT_BAND_RATIO, ATR_SHRINK_RATIO,
+    FLAT_BARS, FLAT_BAND_RATIO, ATR_SHRINK_RATIO, time_stop_bars_for,
 )
 from indicators import ta
 from bot.position import Position
@@ -21,10 +21,17 @@ def is_dead(pos: Position, df: pd.DataFrame) -> tuple[bool, str]:
     (실거래에서 시간 손절이 봉 기준으로 정확히 동작하도록).
     """
     bars_held = int((df.index > pos.entry_time).sum())
+    time_stop = time_stop_bars_for(pos.spec)      # 전략별 시간손절 (v1.3: rsi2 = 96봉)
 
     # ① 시간 손절: N봉 경과 & TP·SL 미도달 (메인 기준)
-    if bars_held >= TIME_STOP_BARS:
-        return True, f"time_stop {bars_held}>={TIME_STOP_BARS} bars"
+    if bars_held >= time_stop:
+        return True, f"time_stop {bars_held}>={time_stop} bars"
+
+    # 부가 규칙(②③④)은 백테스트로 검증된 전략에만 선택적으로 적용한다 (v1.3).
+    # rsi2 는 검증 시 '시간손절 + TP/SL + 청산신호'만 썼으므로, 여기서 부가 규칙을 켜면
+    # 백테스트와 다른 전략이 되어 성적을 재현할 수 없다 (§11 재현성).
+    if not pos.spec.use_dead_extras:
+        return False, ""
 
     # ② 횡보/무변동: 최근 FLAT_BARS 동안 진입가 ±FLAT_BAND 이탈 실패
     if bars_held >= FLAT_BARS and len(df) >= FLAT_BARS:

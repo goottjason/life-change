@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
-CHARTER_VERSION = "v1.2"
+CHARTER_VERSION = "v1.3"
 
 # ── 자본·수수료 (헌장 §1, §13) ────────────────────────────────
 # 자본은 더 이상 고정값이 아니라 '실계좌 잔고(총 자산)'를 런타임에 읽어서 쓴다 (헌장 v1.1 §7.1).
@@ -47,12 +47,30 @@ BACKTEST_MIN_TRADES = 100
 # ── 레짐 필터 (헌장 §8) ──────────────────────────────────────
 ADX_TREND_THRESHOLD = 25            # ADX 이 값 이상이면 추세장 (초기값, 백테스트로 확정)
 
-# ── 종목 스크리닝 (헌장 §3, v1.2) ────────────────────────────
+# ── 종목 스크리닝 (헌장 §3, v1.2 / 스프레드 필터 v1.3) ───────
 UNIVERSE_TOP_N = 6                       # 거래대금 상위 N개만 거래 후보
 MIN_TURNOVER_24H_KRW = 10_000_000_000    # 24h 거래대금 하한(100억) 미달 제외
 UNIVERSE_REFRESH_SEC = 600               # 적격 유니버스 재조회 주기(10분)
 STABLECOINS = {"USDT", "USDC", "DAI", "TUSD", "BUSD"}
 UNIVERSE_BLACKLIST: set[str] = set()     # 수동 제외 심볼(예: {"XYZ"})
+
+# 호가 스프레드 상한 (v1.3) — 거래대금만 보면 안 되는 이유:
+# 업비트 KRW는 가격대별 호가 단위(tick)가 고정이라 **가격이 낮은 코인은 한 틱이 이미 0.2~0.9%**다.
+# 2026-07-26 실측: DOGE 0.930%, ADA 0.412%, TRX 0.206% vs BTC 0.067%, BCH 0.033%.
+# 왕복 스프레드가 거래당 기댓값(≈0.18%)을 넘으면 어떤 신호로도 구조적 손실이므로
+# 거래대금 상위여도 스프레드가 넓은 종목은 유니버스에서 제외한다.
+MAX_SPREAD_RATIO = 0.001                 # (매도호가−매수호가)/중간가 상한 0.1%
+SPREAD_CANDIDATE_MULT = 4                # 스프레드 필터로 탈락할 것을 감안해 후보를 N배 확보
+
+# 최우선 호가 잔량 하한 (v1.3) — 스프레드가 좁아도 잔량이 주문금액보다 작으면 호가를 타고
+# 올라가며 체결돼(= walking the book) 측정한 스프레드보다 큰 비용을 낸다. 전략당 배분
+# (자본의 1/3 ≈ 30,000원)을 최우선 호가에서 소화할 수 있는 종목만 거래한다.
+MIN_TOP_DEPTH_KRW = 30_000
+
+# ── 상위 타임프레임 추세 캐시 (헌장 §2, v1.3) ─────────────────
+# rsi2 는 1시간봉 EMA200 위에서만 진입한다. 판정 기준이 '직전에 완성된 1시간봉'이므로
+# 15분마다 갱신하면 충분하다(매 tick 조회하면 API 낭비).
+TREND_REFRESH_SEC = 900
 
 
 class Regime(str, Enum):
@@ -68,18 +86,36 @@ class StrategySpec:
     atr_stop_mult: float  # k: 손절거리 = k × ATR
     rr: float             # 손익비: 익절거리 = rr × (k × ATR)
     regime: Regime        # 이 전략이 유리한 레짐
+    # ── v1.3 추가: 백테스트로 검증된 설정을 라이브에 그대로 재현하기 위한 필드 ──
+    stop_pct: float | None = None   # 고정 손절거리비율. 지정하면 ATR 대신 이 값을 쓴다
+    min_atr_ratio: float = 0.0      # 진입 변동성 게이트: ATR/가격이 이 값 미만이면 진입 금지
+    time_stop_bars: int | None = None   # 전략별 시간손절(봉). None이면 전역 TIME_STOP_BARS
+    use_dead_extras: bool = True    # §4-A의 부가 규칙(횡보·신호중립·ATR축소) 사용 여부
+    always_active: bool = False     # True면 레짐 필터(§8)를 통과시킨다
 
     @property
     def risk_reward(self) -> float:
         return self.rr
 
 
-# 전략 스펙 — 헌장 §4 표와 1:1 대응 (출발 기본값, 백테스트로 조정)
+# 전략 스펙 — 헌장 §4 표와 1:1 대응
 STRATEGY_SPECS: dict[str, StrategySpec] = {
     "macd": StrategySpec("macd", atr_stop_mult=1.5, rr=2.0, regime=Regime.TREND),
     "rsi":  StrategySpec("rsi",  atr_stop_mult=1.2, rr=1.6, regime=Regime.RANGE),
     "cvd":  StrategySpec("cvd",  atr_stop_mult=1.3, rr=1.7, regime=Regime.REVERSAL),
+    # rsi2 (v1.3) — 2년 5분봉·홀드아웃 17개월에서 §11을 통과한 유일한 설정.
+    # 검증 성적: 553거래 승률 69.1% PF 1.49 거래당 +0.180%(수수료+실측스프레드 차감) t+3.48
+    #            계좌 +32.7% MDD 5.9% (backtesting/research/README.md)
+    # 손절/익절은 ATR이 아니라 고정 2.5%다(검증된 값). 레짐 필터는 적용하지 않는다
+    # (ADX 필터는 개선 근거가 확인되지 않았고, 검증 시에도 쓰지 않았다).
+    "rsi2": StrategySpec("rsi2", atr_stop_mult=0.0, rr=1.0, regime=Regime.RANGE,
+                         stop_pct=0.025, min_atr_ratio=0.006, time_stop_bars=96,
+                         use_dead_extras=False, always_active=True),
 }
+
+# 가동 전략 (v1.3) — macd/rsi/cvd 는 장기·walk-forward·국면분해에서 모두 음의 기댓값으로
+# 확인되어 비활성화한다(backtesting/research/README.md). 되살리려면 §11 기준을 먼저 통과해야 한다.
+ACTIVE_STRATEGIES: tuple[str, ...] = ("rsi2",)
 
 # ── 파생 계산 헬퍼 (모두 '현재 자본(capital)'을 인자로 받는다) ──────────────
 # capital = 실계좌 총 자산(원화 + 보유코인 평가액). 입금하면 자동으로 커지고,
@@ -127,3 +163,18 @@ def stop_ratio_from_atr(atr_stop_mult: float, entry_atr: float, entry_price: flo
     if entry_price > 0 and entry_atr > 0:
         return max(atr_stop_mult * entry_atr / entry_price, MIN_STOP_RATIO)
     return FALLBACK_STOP_RATIO
+
+
+def stop_ratio_for(spec: StrategySpec, entry_atr: float, entry_price: float) -> float:
+    """전략 스펙에 맞는 손절거리비율 (v1.3).
+
+    spec.stop_pct 가 있으면 그 고정값(백테스트에서 검증된 값)을 쓰고, 없으면 ATR 정규화(§7).
+    """
+    if spec.stop_pct is not None:
+        return spec.stop_pct
+    return stop_ratio_from_atr(spec.atr_stop_mult, entry_atr, entry_price)
+
+
+def time_stop_bars_for(spec: StrategySpec) -> int:
+    """전략별 시간손절 봉 수 (§4-A). 지정이 없으면 전역 기본값."""
+    return spec.time_stop_bars if spec.time_stop_bars is not None else TIME_STOP_BARS

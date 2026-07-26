@@ -43,6 +43,13 @@ class BaseStrategy(ABC):
         return self.spec.regime
 
     @abstractmethod
-    def signal(self, df: pd.DataFrame) -> Signal:
-        """최신 봉 기준 진입/청산/보류 신호. df는 시간순 정렬된 OHLCV."""
+    def signal(self, df: pd.DataFrame, ctx: dict | None = None) -> Signal:
+        """
+        최신 봉 기준 진입/청산/보류 신호. df는 시간순 정렬된 OHLCV(기준봉 = 5분).
+
+        ctx: 기준봉만으로 계산할 수 없는 재료를 넘기는 통로 (v1.3).
+          - "trend_up": bool — 상위 타임프레임 추세(1시간봉 EMA200 위). rsi2 전략이 사용.
+          라이브는 매 tick 200봉만 받으므로 1시간봉 추세는 별도 조회해 여기로 전달한다.
+          ctx가 없으면 전략이 df만으로 계산 가능한 경우에만 신호를 낸다.
+        """
         raise NotImplementedError

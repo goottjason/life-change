@@ -45,7 +45,7 @@ def test_open_uses_atr_sizing_and_sets_ratios():
 
     df = _df()
     price = float(df["close"].iloc[-1])
-    strat = build_strategies()["macd"]
+    strat = build_strategies(("macd",))["macd"]   # v1.3: 기본 가동목록에 없어 명시 생성
     t._open("macd", strat, "KRW-BTC", price, df)
 
     entry_atr = float(ta.atr(df).iloc[-1])
@@ -71,7 +71,7 @@ def test_open_skips_when_no_atr():
     t.orders = Orders()
 
     short_df = _df().iloc[:5]   # 14봉 미만 → ATR 불가
-    strat = build_strategies()["macd"]
+    strat = build_strategies(("macd",))["macd"]   # v1.3: 기본 가동목록에 없어 명시 생성
     t._open("macd", strat, "KRW-BTC", 100.0, short_df)
     assert "macd" not in t.positions
     assert "entry_fail" in [e for e, _ in t.logger.events]
