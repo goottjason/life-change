@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
-CHARTER_VERSION = "v1.3"
+CHARTER_VERSION = "v1.4"
 
 # ── 자본·수수료 (헌장 §1, §13) ────────────────────────────────
 # 자본은 더 이상 고정값이 아니라 '실계좌 잔고(총 자산)'를 런타임에 읽어서 쓴다 (헌장 v1.1 §7.1).
@@ -92,6 +92,7 @@ class StrategySpec:
     time_stop_bars: int | None = None   # 전략별 시간손절(봉). None이면 전역 TIME_STOP_BARS
     use_dead_extras: bool = True    # §4-A의 부가 규칙(횡보·신호중립·ATR축소) 사용 여부
     always_active: bool = False     # True면 레짐 필터(§8)를 통과시킨다
+    timeframe: str = BASE_TIMEFRAME  # 이 전략이 판단에 쓰는 봉 (pyupbit interval)
 
     @property
     def risk_reward(self) -> float:
@@ -110,12 +111,21 @@ STRATEGY_SPECS: dict[str, StrategySpec] = {
     # (ADX 필터는 개선 근거가 확인되지 않았고, 검증 시에도 쓰지 않았다).
     "rsi2": StrategySpec("rsi2", atr_stop_mult=0.0, rr=1.0, regime=Regime.RANGE,
                          stop_pct=0.025, min_atr_ratio=0.006, time_stop_bars=96,
-                         use_dead_extras=False, always_active=True),
+                         use_dead_extras=False, always_active=True,
+                         timeframe="minute5"),
+    # rsi2_15m (v1.4) — 같은 신호를 15분봉에 적용. 15분봉은 '한 봉 평균 움직임 0.323% vs
+    # 왕복비용 0.15%'로 5분봉(0.196% vs 0.15%)보다 비용 부담이 절반이라 거래당 엣지가 크다.
+    # 검증(홀드아웃 17개월): 188거래 승률 73.9% PF 1.96 거래당 +0.489% t+3.75
+    # 5분봉과 병행 시(동시 3포지션·동일코인 중복 금지): 741신호 PF 1.64 t+5.06 계좌 +51.4% MDD 6.2%
+    "rsi2_15m": StrategySpec("rsi2_15m", atr_stop_mult=0.0, rr=1.0, regime=Regime.RANGE,
+                             stop_pct=0.030, min_atr_ratio=0.010, time_stop_bars=32,
+                             use_dead_extras=False, always_active=True,
+                             timeframe="minute15"),
 }
 
-# 가동 전략 (v1.3) — macd/rsi/cvd 는 장기·walk-forward·국면분해에서 모두 음의 기댓값으로
+# 가동 전략 (v1.4) — macd/rsi/cvd 는 장기·walk-forward·국면분해에서 모두 음의 기댓값으로
 # 확인되어 비활성화한다(backtesting/research/README.md). 되살리려면 §11 기준을 먼저 통과해야 한다.
-ACTIVE_STRATEGIES: tuple[str, ...] = ("rsi2",)
+ACTIVE_STRATEGIES: tuple[str, ...] = ("rsi2", "rsi2_15m")
 
 # ── 파생 계산 헬퍼 (모두 '현재 자본(capital)'을 인자로 받는다) ──────────────
 # capital = 실계좌 총 자산(원화 + 보유코인 평가액). 입금하면 자동으로 커지고,

@@ -47,10 +47,12 @@ class PortResult:
 
 def run(trades: list[PortTrade], capital: float = C.DEFAULT_CAPITAL_KRW,
         max_concurrent: int = C.MAX_CONCURRENT_POSITIONS,
-        daily_loss_limit: bool = True) -> PortResult:
+        daily_loss_limit: bool = True,
+        no_duplicate_market: bool = True) -> PortResult:
     """
     시간순으로 진입 신호를 처리한다. 자본은 실현손익이 날 때 갱신(§7.1의 잔고연동을 단순화).
     동시 보유가 max_concurrent 이면 신호를 버린다(라이브와 동일하게 '기회 손실'로 계산).
+    no_duplicate_market: 같은 코인 중복 보유 금지 (§3.3) — 여러 타임프레임 전략을 합칠 때 필요.
     """
     if not trades:
         return PortResult(capital, 0.0, 0.0, 0, 0, 0, 0)
@@ -59,6 +61,7 @@ def run(trades: list[PortTrade], capital: float = C.DEFAULT_CAPITAL_KRW,
     peak = capital
     mdd = 0.0
     open_until: list[pd.Timestamp] = []
+    open_markets: list[tuple] = []      # (exit_ts, market)
     realized: list[tuple[pd.Timestamp, float]] = []   # (청산시각, 손익금액)
     day_pnl: dict = {}
     taken = skipped_slots = skipped_daily = 0
@@ -74,7 +77,11 @@ def run(trades: list[PortTrade], capital: float = C.DEFAULT_CAPITAL_KRW,
             mdd = max(mdd, 1 - equity / peak) if peak > 0 else mdd
         realized = [r for r in realized if r[0] > t.entry_ts]
         open_until = [u for u in open_until if u > t.entry_ts]
+        open_markets = [x for x in open_markets if x[0] > t.entry_ts]
 
+        if no_duplicate_market and any(mk == t.market for _, mk in open_markets):
+            skipped_slots += 1                      # §3.3 동일코인 중복 금지
+            continue
         if daily_loss_limit:
             today = day_pnl.get(t.entry_ts.date(), 0.0)
             if today <= -C.daily_loss_limit_krw(equity):     # §5.2
@@ -91,6 +98,7 @@ def run(trades: list[PortTrade], capital: float = C.DEFAULT_CAPITAL_KRW,
             continue
         taken += 1
         open_until.append(t.exit_ts)
+        open_markets.append((t.exit_ts, t.market))
         realized.append((t.exit_ts, size * t.pnl_ratio))
 
     for ts, amount in realized:                              # 남은 포지션 정산

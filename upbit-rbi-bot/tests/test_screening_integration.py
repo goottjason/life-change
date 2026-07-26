@@ -52,8 +52,8 @@ def test_open_uses_atr_sizing_and_sets_ratios():
     stop_ratio = strat.spec.atr_stop_mult * entry_atr / price
     expected = C.position_size_krw(stop_ratio, t.risk.s.capital, t.risk.s.available_krw)
     assert captured["krw"] == pytest.approx(expected)
-    assert "macd" in t.positions
-    p = t.positions["macd"]
+    assert "macd:KRW-BTC" in t.positions        # v1.4: 키 = 전략:코인
+    p = t.positions["macd:KRW-BTC"]
     assert p.sl_ratio == pytest.approx(stop_ratio)
     assert p.tp_ratio == pytest.approx(stop_ratio * 2.0)
 
@@ -73,7 +73,7 @@ def test_open_skips_when_no_atr():
     short_df = _df().iloc[:5]   # 14봉 미만 → ATR 불가
     strat = build_strategies(("macd",))["macd"]   # v1.3: 기본 가동목록에 없어 명시 생성
     t._open("macd", strat, "KRW-BTC", 100.0, short_df)
-    assert "macd" not in t.positions
+    assert "macd:KRW-BTC" not in t.positions
     assert "entry_fail" in [e for e, _ in t.logger.events]
 
 
@@ -84,11 +84,12 @@ def test_tick_scans_screener_markets():
     t.last_prices = {}
     t.regimes = {}
     t.notifier = _Null()
+    t.strategies = build_strategies(("macd",))    # v1.4: 타임프레임 수집에 필요
     scanned = []
 
     class Client:
         def get_account_equity(self, lookup): return (90_000.0, 90_000.0)
-        def get_candles(self, market):
+        def get_candles(self, market, interval=None, count=200):
             scanned.append(market)
             raise RuntimeError("skip processing")
     t.client = Client()

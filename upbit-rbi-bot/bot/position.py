@@ -44,6 +44,12 @@ class Position:
     def spec(self):
         return STRATEGY_SPECS[self.strategy]
 
+    @property
+    def key(self) -> str:
+        """포지션 식별자 (v1.4). 한 전략이 서로 다른 코인에 동시 진입할 수 있어
+        '전략명'만으로는 구분되지 않는다 → '전략:코인'."""
+        return f"{self.strategy}:{self.market}"
+
     def pnl_ratio(self, price: float) -> float:
         """수수료 반영 손익률 (§4, §0.4)."""
         gross = (price - self.entry_price) / self.entry_price

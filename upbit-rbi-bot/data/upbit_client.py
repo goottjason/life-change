@@ -5,6 +5,7 @@ DRY_RUN 모드에서는 실제 주문을 내지 않고 로깅만 한다(헌장 �
 """
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 
 import pandas as pd
@@ -16,6 +17,22 @@ except ImportError:  # 설계 단계에서 미설치여도 import 실패하지 �
 
 from config.settings import settings
 from config.charter import BASE_TIMEFRAME
+
+
+# ── 시세 조회 스로틀 (v1.4) ──────────────────────────────────
+# 업비트 시세 API는 초당 요청 수 제한이 있다. v1.4에서 전략이 5분봉·15분봉을 함께 쓰면서
+# tick당 요청이 (종목수 × 타임프레임수 + 추세조회)로 늘어 순간적으로 한도를 넘겨
+# 캔들 조회가 실패했다(= 진입 기회 상실). 호출 간 최소 간격을 두고, 실패 시 1회 재시도한다.
+_QUOTE_MIN_INTERVAL = 0.15      # 초 (≈6.7 req/s)
+_last_quote_at = 0.0
+
+
+def _throttle() -> None:
+    global _last_quote_at
+    wait = _QUOTE_MIN_INTERVAL - (time.monotonic() - _last_quote_at)
+    if wait > 0:
+        time.sleep(wait)
+    _last_quote_at = time.monotonic()
 
 
 @dataclass
@@ -40,10 +57,14 @@ class UpbitClient:
         """OHLCV 캔들. columns: open/high/low/close/volume, index=datetime."""
         if pyupbit is None:
             raise RuntimeError("pyupbit 미설치 — pip install pyupbit")
-        df = pyupbit.get_ohlcv(market, interval=interval, count=count)
-        if df is None:
-            raise RuntimeError(f"candle fetch failed: {market}")
-        return df.rename(columns=str.lower)
+        for attempt in (1, 2):                  # 레이트리밋 등 일시 실패 1회 재시도 (v1.4)
+            _throttle()
+            df = pyupbit.get_ohlcv(market, interval=interval, count=count)
+            if df is not None and not df.empty:
+                return df.rename(columns=str.lower)
+            if attempt == 1:
+                time.sleep(0.4)
+        raise RuntimeError(f"candle fetch failed: {market} ({interval})")
 
     def get_price(self, market: str) -> float:
         return float(pyupbit.get_current_price(market))

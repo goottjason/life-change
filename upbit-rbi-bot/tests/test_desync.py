@@ -144,12 +144,12 @@ def _bare_trader():
 def test_close_keeps_position_when_exit_fails():
     t = _bare_trader()
     pos = _pos()
-    t.positions["macd"] = pos
+    t.positions[pos.key] = pos          # v1.4: 키 = 전략:코인
     t.orders = _FailingOrders()
 
     t._close(pos, price=100.0, reason=ExitReason.REVERSE_SIGNAL)
 
-    assert "macd" in t.positions, "청산 실패 시 포지션을 유지해야 함(오펀 방지)"
+    assert pos.key in t.positions, "청산 실패 시 포지션을 유지해야 함(오펀 방지)"
     events = [e for e, _ in t.logger.events]
     assert "exit" not in events, "실패한 청산을 exit 로 기록하면 안 됨"
 
@@ -170,37 +170,37 @@ class _PartialOrders:
 def test_close_keeps_remainder_on_partial_fill():
     t = _bare_trader()
     pos = _pos(volume=200.0)          # 진입가 100 → 잔량 100개 = 10,000원(>최소주문)
-    t.positions["macd"] = pos
+    t.positions[pos.key] = pos          # v1.4: 키 = 전략:코인
     t.orders = _PartialOrders(filled=100.0)
 
     t._close(pos, price=100.0, reason=ExitReason.REVERSE_SIGNAL)
 
-    assert "macd" in t.positions              # 잔량 유지
-    assert t.positions["macd"].volume == pytest.approx(100.0)
+    assert pos.key in t.positions              # 잔량 유지
+    assert t.positions[pos.key].volume == pytest.approx(100.0)
     assert "exit_partial" in [e for e, _ in t.logger.events]
 
 
 def test_close_finalizes_when_remainder_is_dust():
     t = _bare_trader()
     pos = _pos(volume=200.0)          # 잔량 1개 = 100원(<최소주문 5,000) → 먼지 → 청산완료
-    t.positions["macd"] = pos
+    t.positions[pos.key] = pos          # v1.4: 키 = 전략:코인
     t.orders = _PartialOrders(filled=199.0)
 
     t._close(pos, price=100.0, reason=ExitReason.REVERSE_SIGNAL)
 
-    assert "macd" not in t.positions
+    assert pos.key not in t.positions
     assert "exit" in [e for e, _ in t.logger.events]
 
 
 def test_close_removes_position_when_exit_confirmed():
     t = _bare_trader()
     pos = _pos()
-    t.positions["macd"] = pos
+    t.positions[pos.key] = pos          # v1.4: 키 = 전략:코인
     t.orders = _OkOrders()
 
     t._close(pos, price=100.0, reason=ExitReason.REVERSE_SIGNAL)
 
-    assert "macd" not in t.positions
+    assert pos.key not in t.positions
     events = [e for e, _ in t.logger.events]
     assert "exit" in events
 

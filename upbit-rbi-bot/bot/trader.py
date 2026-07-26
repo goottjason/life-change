@@ -41,6 +41,7 @@ ALL_STRATEGIES = {
     "rsi": RsiMeanReversionStrategy,
     "cvd": CvdStrategy,
     "rsi2": Rsi2PullbackStrategy,
+    "rsi2_15m": Rsi2PullbackStrategy,      # 같은 신호, 15분봉 (스펙의 timeframe 으로 구분)
 }
 
 
@@ -95,7 +96,10 @@ class Trader:
         known = {p.market for p in self.positions.values()}
         orphans = self.failsafe.recover_state(known_markets=known)
         for o in orphans:
-            slot = next((n for n in self.strategies if n not in self.positions), None)
+            # v1.4: 포지션 키가 '전략:코인'이라 같은 코인만 아니면 어느 전략에든 붙일 수 있다.
+            # 기준봉 전략(5분)에 먼저 배정하고, 이미 그 코인을 들고 있으면 다른 전략을 찾는다.
+            slot = next((n for n, s in self.strategies.items()
+                         if f"{n}:{o['market']}" not in self.positions), None)
             if slot is None:
                 self.notifier.send(
                     f"⚠️ 오펀 코인 {o['market']} 복원 실패: 빈 전략 슬롯 없음 — 수동 확인 필요")
@@ -112,11 +116,12 @@ class Trader:
                 entry_atr = 0.0
                 self.logger.log("recover", strategy=slot, market=o["market"],
                                 reason=f"atr_lookup_failed: {e}")
-            self.positions[slot] = Position(
+            rec_pos = Position(
                 strategy=slot, market=o["market"], entry_price=o["avg_price"],
                 size_krw=o["avg_price"] * o["volume"], volume=o["volume"],
                 entry_time=entry_time, entry_atr=entry_atr,
             )
+            self.positions[rec_pos.key] = rec_pos
             self.risk.on_open()
             self.notifier.send(
                 f"🔧 오펀 복원: {o['market']} {o['volume']:.8f}개 @ {o['avg_price']:.0f} "
@@ -141,13 +146,18 @@ class Trader:
         except Exception as e:
             self.failsafe.on_api_error(e)
 
+        # 가동 전략이 쓰는 타임프레임을 모아 종목별로 한 번씩 조회한다 (v1.4: 5분+15분 병행)
+        timeframes = sorted({s.spec.timeframe for s in self.strategies.values()})
         for market in self.screener.eligible():
-            try:
-                df = self.client.get_candles(market)
-            except Exception as e:
-                self.failsafe.on_api_error(e)
+            frames: dict[str, pd.DataFrame] = {}
+            for tf in timeframes:
+                try:
+                    frames[tf] = self.client.get_candles(market, interval=tf)
+                except Exception as e:
+                    self.failsafe.on_api_error(e)
+            if not frames:
                 continue
-            self._process_market(market, df)
+            self._process_market(market, frames)
 
     # ── 상위 타임프레임 추세 (rsi2 §2, v1.3) ────────────────
     def _trend_ctx(self, market: str) -> dict:
@@ -174,39 +184,58 @@ class Trader:
         self.trend_up[market] = up
         return {"trend_up": up}
 
-    def _process_market(self, market: str, df: pd.DataFrame) -> None:
-        price = df["close"].iloc[-1]
-        regime = detect_regime(df)
-        self.last_prices[market] = float(price)     # 대시보드 캐시
+    def _process_market(self, market: str, frames: dict) -> None:
+        """
+        frames: {타임프레임: 캔들} — 전략마다 자기 타임프레임의 캔들로 판단한다 (v1.4).
+        청산도 그 포지션을 만든 전략의 타임프레임으로 판정해야 백테스트와 일치한다
+        (시간손절 봉 수·ATR·신호가 모두 봉 단위이므로).
+        """
+        # DataFrame 은 `or` 로 평가할 수 없다(진리값 모호) → 명시적 None 검사
+        base = frames.get(C.BASE_TIMEFRAME)
+        if base is None:
+            base = next(iter(frames.values()))
+        self.last_prices[market] = float(base["close"].iloc[-1])   # 대시보드 캐시
+        regime = detect_regime(base)
         self.regimes[market] = regime.value
         ctx = self._trend_ctx(market)
 
         # 1. 보유 포지션 청산 판정
-        for name, pos in list(self.positions.items()):
+        for key, pos in list(self.positions.items()):
             if pos.market != market:
                 continue
+            df = frames.get(pos.spec.timeframe)
+            if df is None:                    # 해당 봉 조회 실패 → 이번 tick 판정 보류
+                continue
+            price = float(df["close"].iloc[-1])
             pos.update_high(price)
             reason = pos.check_price_exit(price)           # TP/SL (§4.1~2)
+            why = ""
             if reason == ExitReason.NONE:
                 dead, why = dead_position.is_dead(pos, df)  # §4-A
                 if dead:
                     reason = ExitReason.DEAD_POSITION
-                else:
-                    sig = self.strategies[name].signal(df, ctx)  # 역방향 (§4.3)
+                elif pos.strategy in self.strategies:
+                    sig = self.strategies[pos.strategy].signal(df, ctx)   # 역방향 (§4.3)
                     if sig.action == Action.EXIT:
                         reason = ExitReason.REVERSE_SIGNAL
             if reason != ExitReason.NONE:
-                self._close(pos, price, reason, note=why if reason == ExitReason.DEAD_POSITION else reason.value)
+                self._close(pos, price, reason,
+                            note=why if reason == ExitReason.DEAD_POSITION else reason.value)
 
         # 2~3. 진입: 레짐 활성 전략만 (§8) + 리스크 통과(§5) + 사이징(§7)
         for name, strat in self.strategies.items():
-            if name in self.positions:            # 전략당 1포지션 (§3.4)
+            df = frames.get(strat.spec.timeframe)
+            if df is None:
+                continue
+            if f"{name}:{market}" in self.positions:     # 같은 전략·같은 코인 중복 금지
                 continue
             # always_active 전략은 레짐 필터를 통과시킨다 (§8, v1.3):
             # ADX 레짐 필터는 백테스트에서 기댓값 개선이 확인되지 않았고, rsi2 검증 시에도
             # 쓰지 않았으므로 적용하면 '검증되지 않은 다른 전략'이 된다.
             if not strat.spec.always_active and not is_strategy_active(strat.regime, regime):
                 continue
+            # 동시 포지션 한도(§5.5, 3개)는 risk.can_enter() 가 본다. 전략당 1포지션 제약은
+            # v1.4에서 제거 — 백테스트 포트폴리오가 동시 3포지션을 가정했으므로 맞춘다.
             ok, _ = self.risk.can_enter()
             if not ok:
                 continue
@@ -215,7 +244,7 @@ class Trader:
                 continue
             if self._is_duplicate(market):         # 동일코인 중복 금지 (§3.3)
                 continue
-            self._open(name, strat, market, price, df, note=sig.reason)
+            self._open(name, strat, market, float(df["close"].iloc[-1]), df, note=sig.reason)
 
     # ── 진입/청산 실행 ───────────────────────────────────────
     def _open(self, name: str, strat: BaseStrategy, market: str,
@@ -235,11 +264,12 @@ class Trader:
             self.logger.log("entry_fail", strategy=name, market=market,
                             reason=res.error or "no fill")
             return
-        self.positions[name] = Position(
+        pos = Position(
             strategy=name, market=market, entry_price=res.avg_price or price,
             size_krw=krw, volume=res.filled_volume, entry_time=df.index[-1],
             entry_atr=entry_atr,
         )
+        self.positions[pos.key] = pos          # '전략:코인' 키 (v1.4)
         self.risk.on_open()
         self.logger.log("entry", strategy=name, market=market, price=price,
                         volume=res.filled_volume, size_krw=krw, reason=note)
@@ -274,7 +304,7 @@ class Trader:
         fill_price = res.avg_price or price
         pnl = pos.pnl_krw(fill_price)
         self.risk.on_close(pnl)                                 # §5 상태 갱신
-        self.positions.pop(pos.strategy, None)
+        self.positions.pop(pos.key, None)
         self.logger.log("exit", strategy=pos.strategy, market=pos.market,
                         price=fill_price, volume=filled, pnl_krw=pnl,
                         reason=f"{reason.value}:{note}")
@@ -292,10 +322,11 @@ class Trader:
         equity = s.capital  # 실계좌 총 자산 (§7.1)
         drawdown = (s.equity_high - equity) / s.equity_high if s.equity_high else 0.0
         positions = []
-        for name, pos in list(self.positions.items()):
+        for key, pos in list(self.positions.items()):
             price = self.last_prices.get(pos.market, pos.entry_price)
             positions.append({
-                "strategy": name,
+                "strategy": pos.strategy,
+                "timeframe": pos.spec.timeframe,
                 "market": pos.market,
                 "entry_price": pos.entry_price,
                 "current_price": price,

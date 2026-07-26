@@ -62,7 +62,23 @@ def test_rsi2_스펙_검증값():
     spec = C.STRATEGY_SPECS["rsi2"]
     assert (spec.stop_pct, spec.rr, spec.min_atr_ratio) == (0.025, 1.0, 0.006)
     assert C.time_stop_bars_for(spec) == 96
-    assert C.ACTIVE_STRATEGIES == ("rsi2",)
+    assert spec.timeframe == "minute5"
+
+
+def test_rsi2_15m_스펙_검증값():
+    """15분봉 병행(v1.4). 홀드아웃 188거래 승률 73.9% PF 1.96 exp +0.489% t+3.75."""
+    spec = C.STRATEGY_SPECS["rsi2_15m"]
+    assert (spec.stop_pct, spec.rr, spec.min_atr_ratio) == (0.030, 1.0, 0.010)
+    assert C.time_stop_bars_for(spec) == 32       # 8시간 = 15분 × 32봉
+    assert spec.timeframe == "minute15"
+    assert spec.use_dead_extras is False and spec.always_active is True
+
+
+def test_가동전략_목록():
+    assert C.ACTIVE_STRATEGIES == ("rsi2", "rsi2_15m")
+    # 시간손절은 두 전략이 같은 실제 시간(8시간)을 쓴다 — 검증 조건과 일치
+    assert C.time_stop_bars_for(C.STRATEGY_SPECS["rsi2"]) * 5 == \
+           C.time_stop_bars_for(C.STRATEGY_SPECS["rsi2_15m"]) * 15
 
 
 def test_스프레드_상한과_추세갱신주기():
