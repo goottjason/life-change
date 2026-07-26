@@ -56,6 +56,11 @@ def api_stats() -> list[dict]:
     return service.stats()
 
 
+@app.get(PREFIX + "/api/roundtrips")
+def api_roundtrips(limit: int = 50) -> list[dict]:
+    return service.round_trips(min(limit, 200))
+
+
 @app.post(PREFIX + "/api/kill")
 def api_kill(x_token: str = Header(default="")) -> dict:
     if not DASHBOARD_TOKEN or x_token != DASHBOARD_TOKEN:

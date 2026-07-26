@@ -53,13 +53,19 @@ class UpbitClient:
         volume = krw / price
         if settings.dry_run:
             return OrderResult(ok=True, order_id="DRY", filled_volume=volume, avg_price=price)
-        resp = self._upbit.buy_limit_order(market, price, volume)
+        try:
+            resp = self._upbit.buy_limit_order(market, price, volume)
+        except Exception as e:
+            return OrderResult(ok=False, error=f"buy_limit exception: {e}")
         return self._parse(resp)
 
     def sell_limit(self, market: str, price: float, volume: float) -> OrderResult:
         if settings.dry_run:
             return OrderResult(ok=True, order_id="DRY", filled_volume=volume, avg_price=price)
-        resp = self._upbit.sell_limit_order(market, price, volume)
+        try:
+            resp = self._upbit.sell_limit_order(market, price, volume)
+        except Exception as e:
+            return OrderResult(ok=False, error=f"sell_limit exception: {e}")
         return self._parse(resp)
 
     def sell_market(self, market: str, volume: float) -> OrderResult:
@@ -67,7 +73,10 @@ class UpbitClient:
         if settings.dry_run:
             price = self.get_price(market)
             return OrderResult(ok=True, order_id="DRY", filled_volume=volume, avg_price=price)
-        resp = self._upbit.sell_market_order(market, volume)
+        try:
+            resp = self._upbit.sell_market_order(market, volume)
+        except Exception as e:
+            return OrderResult(ok=False, error=f"sell_market exception: {e}")
         return self._parse(resp)
 
     def cancel(self, order_id: str) -> bool:
@@ -80,6 +89,35 @@ class UpbitClient:
         if settings.dry_run or self._upbit is None:
             return []
         return self._upbit.get_order(market, state="wait") or []
+
+    def get_order_detail(self, uuid: str) -> dict | None:
+        """단일 주문 상세(체결 확인용, §6.3). state/executed_volume/trades 포함."""
+        if settings.dry_run or self._upbit is None or not uuid or uuid == "DRY":
+            return None
+        try:
+            return self._upbit.get_order(uuid)
+        except Exception:
+            return None
+
+    def get_last_buy_time(self, market: str) -> float | None:
+        """
+        해당 마켓의 가장 최근 '체결된 매수' 시각(epoch초). 오펀 포지션 복구용(§9.3).
+        조회 실패/없음이면 None(호출측이 현재시각으로 폴백).
+        """
+        if settings.dry_run or self._upbit is None:
+            return None
+        try:
+            orders = self._upbit.get_order(market, state="done") or []
+        except Exception:
+            return None
+        buys = [o for o in orders if o.get("side") == "bid" and o.get("created_at")]
+        if not buys:
+            return None
+        buys.sort(key=lambda o: o["created_at"], reverse=True)
+        try:
+            return pd.Timestamp(buys[0]["created_at"]).timestamp()
+        except Exception:
+            return None
 
     def get_balances(self) -> list[dict]:
         """상태 복구용 (§9.3)."""
@@ -134,6 +172,31 @@ class UpbitClient:
 
     @staticmethod
     def _parse(resp: dict | None) -> OrderResult:
+        # 업비트 에러 응답: {'error': {'name': ..., 'message': ...}} → 원인을 reason 에 담는다.
+        if isinstance(resp, dict) and resp.get("error"):
+            err = resp["error"]
+            if isinstance(err, dict):
+                name = err.get("name", "")
+                msg = err.get("message", "")
+                return OrderResult(ok=False, error=f"{name}: {msg}".strip(" :"))
+            return OrderResult(ok=False, error=str(err))
         if not resp or "uuid" not in resp:
-            return OrderResult(ok=False, error=str(resp))
-        return OrderResult(ok=True, order_id=resp["uuid"], raw=resp)
+            return OrderResult(ok=False, error=f"unexpected response: {resp}")
+        # 주문 접수 응답엔 보통 체결정보가 없다(0). 실제 체결량은 get_order_detail 로 확인한다.
+        vol, avg = avg_from_order(resp)
+        return OrderResult(ok=True, order_id=resp["uuid"],
+                           filled_volume=vol, avg_price=avg, raw=resp)
+
+
+def avg_from_order(detail: dict) -> tuple[float, float]:
+    """주문 상세에서 (체결수량, 평단가) 계산. trades[].funds/volume 우선."""
+    executed = float(detail.get("executed_volume", 0) or 0)
+    trades = detail.get("trades") or []
+    funds = 0.0
+    tvol = 0.0
+    for t in trades:
+        funds += float(t.get("funds", 0) or 0)
+        tvol += float(t.get("volume", 0) or 0)
+    avg = (funds / tvol) if tvol > 0 else 0.0
+    vol = executed or tvol
+    return vol, avg

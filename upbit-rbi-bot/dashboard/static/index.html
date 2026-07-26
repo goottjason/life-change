@@ -10,6 +10,12 @@
     --txt:#e6edf3; --muted:#8b98a9; --accent:#5b8cff;
     --up:#2ec26b; --down:#ff5c6c; --warn:#ffb020; --halt:#ff4d4f;
   }
+  /* 라이트 테마 (A) — data-theme="light" 시 변수 오버라이드 */
+  :root[data-theme="light"]{
+    --bg:#f5f7fb; --panel:#ffffff; --panel2:#eef2f8; --line:#dfe5ee;
+    --txt:#1a2230; --muted:#5f6b7d; --accent:#2f6bff;
+    --up:#0f9d58; --down:#e23b47; --warn:#b8770a; --halt:#d93438;
+  }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--txt);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
@@ -49,9 +55,12 @@
   .chip.trend{color:var(--accent)} .chip.range{color:var(--warn)} .chip.reversal{color:#c07bff}
   .empty{padding:24px 16px;color:var(--muted);text-align:center;font-size:13px}
   .foot{margin-top:26px;color:var(--muted);font-size:11px;line-height:1.7;border-top:1px solid var(--line);padding-top:14px}
-  .kill{background:transparent;border:1px solid var(--halt);color:#ff8f90;border-radius:8px;
+  .kill{background:transparent;border:1px solid var(--halt);color:var(--halt);border-radius:8px;
     padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer}
   .kill:hover{background:rgba(255,77,79,.12)}
+  .theme-btn{background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:8px;
+    padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer}
+  .theme-btn:hover{border-color:var(--accent);color:var(--accent)}
   .scroll{overflow-x:auto}
   .row-strats{display:flex;gap:8px;flex-wrap:wrap;padding:12px 16px}
   .strat{flex:1;min-width:130px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
@@ -65,7 +74,8 @@
     <h1><span>LIFE&nbsp;CHANGE</span> · 업비트 자동매매 현황</h1>
     <span id="mode" class="badge dry">—</span>
     <span style="color:var(--muted);font-size:12px"><span id="dot" class="dot off"></span><span id="running">연결 중…</span></span>
-    <button class="kill" onclick="doKill()" style="margin-left:auto">🛑 KILL</button>
+    <button class="theme-btn" id="themeBtn" onclick="toggleTheme()" style="margin-left:auto" title="라이트/다크 전환">🌙 다크</button>
+    <button class="kill" onclick="doKill()">🛑 KILL</button>
   </header>
   <div class="sub" id="meta">—</div>
 
@@ -91,9 +101,18 @@
   </div>
 
   <div class="card" style="margin-top:16px">
-    <h2>최근 거래</h2>
+    <h2>체결 내역 (진입 → 청산)</h2>
+    <div class="scroll"><table id="rttbl">
+      <thead><tr><th>청산시각(KST)</th><th>전략</th><th>마켓</th><th>진입가</th><th>청산가</th><th>보유</th><th>손익</th><th>신호/청산 사유</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="empty" id="rtempty">완료된 체결 없음</div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h2>최근 거래 (원시 로그)</h2>
     <div class="scroll"><table id="tradetbl">
-      <thead><tr><th>시각(UTC)</th><th>이벤트</th><th>전략</th><th>마켓</th><th>가격</th><th>손익</th><th>사유</th></tr></thead>
+      <thead><tr><th>시각(KST)</th><th>이벤트</th><th>전략</th><th>마켓</th><th>가격</th><th>손익</th><th>사유</th></tr></thead>
       <tbody></tbody>
     </table></div>
     <div class="empty" id="tradeempty">거래 기록 없음</div>
@@ -114,12 +133,13 @@ const cls = n => n>0?"pos":(n<0?"neg":"");
 
 async function refresh(){
   try{
-    const [st, tr, sta] = await Promise.all([
+    const [st, tr, sta, rt] = await Promise.all([
       fetch(BASE+"/api/status").then(r=>r.json()),
       fetch(BASE+"/api/trades?limit=30").then(r=>r.json()),
       fetch(BASE+"/api/stats").then(r=>r.json()),
+      fetch(BASE+"/api/roundtrips?limit=30").then(r=>r.json()),
     ]);
-    renderStatus(st); renderTrades(tr); renderStats(sta);
+    renderStatus(st); renderTrades(tr); renderStats(sta); renderRoundTrips(rt);
   }catch(e){
     document.getElementById("running").textContent = "연결 실패";
   }
@@ -191,9 +211,53 @@ function renderTrades(list){
   document.querySelector("#tradetbl").style.display = list.length?"table":"none";
 }
 
+function renderRoundTrips(list){
+  const tb=document.querySelector("#rttbl tbody");
+  tb.innerHTML = (list||[]).map(t=>`<tr>
+    <td>${fmt(t.exit_ts)}</td>
+    <td>${(t.strategy||"").toUpperCase()}</td>
+    <td>${t.market||""}</td>
+    <td>${t.entry_price!=null?Math.round(t.entry_price).toLocaleString():"—"}</td>
+    <td>${t.exit_price!=null?Math.round(t.exit_price).toLocaleString():"—"}</td>
+    <td>${hold(t.hold_sec)}</td>
+    <td class="${cls(t.pnl_krw)}">${t.pnl_krw!=null?won(t.pnl_krw):""}</td>
+    <td style="text-align:left;color:var(--muted)">${reasonPair(t)}</td></tr>`).join("");
+  const has=(list||[]).length;
+  document.getElementById("rtempty").style.display = has?"none":"block";
+  document.querySelector("#rttbl").style.display = has?"table":"none";
+}
+const reasonPair=t=>{
+  const inr=(t.entry_reason||"").toString().slice(0,40);
+  const outr=(t.exit_reason||"").toString().slice(0,40);
+  return `${inr?"↳ "+inr+"<br>":""}⤴ ${outr||"—"}`;
+};
+const hold=s=>{
+  if(s==null) return "—";
+  s=Math.round(s); const h=Math.floor(s/3600), m=Math.floor((s%3600)/60);
+  return h?`${h}시간 ${m}분`:`${m}분`;
+};
+
 const kpi=(l,v,c,small)=>`<div class="kpi"><div class="label">${l}</div><div class="val ${c} ${small?'small':''}">${v}</div></div>`;
-const badge=e=>({entry:'🟢 진입',exit:'⚪ 청산',entry_fail:'🔴 실패'}[e]||e);
-const fmt=t=>t?t.replace("T"," ").replace(/(\+00:00|Z)$/,"").slice(5,19):"—";
+const badge=e=>({entry:'🟢 진입',exit:'⚪ 청산',exit_partial:'🟡 부분청산',exit_fail:'🔴 청산실패',entry_fail:'🔴 진입실패',recover:'🔧 복원'}[e]||e);
+const fmt=t=>t?t.replace("T"," ").replace(/(\+00:00|\+09:00|Z)$/,"").slice(5,19):"—";
+
+// ── 라이트/다크 테마 (A) ──────────────────────────────────
+function applyTheme(mode){
+  document.documentElement.setAttribute("data-theme", mode);
+  const b=document.getElementById("themeBtn");
+  if(b) b.textContent = mode==="light" ? "☀️ 라이트" : "🌙 다크";
+}
+function toggleTheme(){
+  const cur=document.documentElement.getAttribute("data-theme")||"dark";
+  const next=cur==="light"?"dark":"light";
+  localStorage.setItem("lc-theme", next);
+  applyTheme(next);
+}
+(function initTheme(){
+  const saved=localStorage.getItem("lc-theme");
+  const sys=window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light":"dark";
+  applyTheme(saved || sys);
+})();
 
 async function doKill(){
   const token=prompt("킬 스위치 — DASHBOARD_TOKEN 입력 (전 포지션 시장가 청산 + 정지):");

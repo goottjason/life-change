@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import os
 import sqlite3
-from datetime import datetime, timezone
 
 from config.settings import settings
+from config.timeutil import now_kst_iso
 
 
 class TradeLogger:
@@ -30,7 +30,7 @@ class TradeLogger:
     def log(self, event: str, *, strategy: str = "", market: str = "",
             price: float = 0.0, volume: float = 0.0, size_krw: float = 0.0,
             pnl_krw: float = 0.0, reason: str = "") -> None:
-        ts = datetime.now(timezone.utc).isoformat()
+        ts = now_kst_iso()  # KST(Asia/Seoul) 표기 — 사용자 혼란 방지
         with sqlite3.connect(self.db_path) as con:
             con.execute(
                 "INSERT INTO trades (ts,event,strategy,market,price,volume,size_krw,pnl_krw,reason)"

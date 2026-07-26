@@ -17,6 +17,7 @@ import pandas as pd
 from config.settings import settings
 from config import charter as C
 from config.charter import STRATEGY_SPECS
+from config.timeutil import now_kst
 from data.upbit_client import UpbitClient
 from bot.order_manager import OrderManager
 from bot.risk_manager import RiskManager
@@ -57,8 +58,40 @@ class Trader:
     # ── 부팅 (§9.3 상태 복구) ────────────────────────────────
     def boot(self) -> None:
         settings.validate()
-        self.failsafe.recover_state()
+        self._recover_positions()
         self.notifier.send(f"🤖 봇 시작 (dry_run={settings.dry_run})")
+
+    def _recover_positions(self) -> None:
+        """
+        재시작 시 실계좌 잔고를 읽어 '봇이 모르는 보유 코인(오펀)'을 포지션으로 복원한다 (§9.3).
+        진입가는 avg_buy_price, 진입시각은 최근 매수체결 시각(없으면 현재봉)으로 채운다.
+        복원된 포지션은 빈 전략 슬롯에 배정되어 TP/SL·죽은포지션 관리를 받는다.
+        """
+        known = {p.market for p in self.positions.values()}
+        orphans = self.failsafe.recover_state(known_markets=known)
+        for o in orphans:
+            slot = next((n for n in self.strategies if n not in self.positions), None)
+            if slot is None:
+                self.notifier.send(
+                    f"⚠️ 오펀 코인 {o['market']} 복원 실패: 빈 전략 슬롯 없음 — 수동 확인 필요")
+                continue
+            # pyupbit 캔들 인덱스는 tz-naive KST 이므로 entry_time 도 동일 기준으로 맞춘다.
+            if o.get("entry_time"):
+                entry_time = pd.Timestamp(o["entry_time"] + 9 * 3600, unit="s")  # epoch→KST naive
+            else:
+                entry_time = pd.Timestamp(now_kst().replace(tzinfo=None))
+            self.positions[slot] = Position(
+                strategy=slot, market=o["market"], entry_price=o["avg_price"],
+                size_krw=o["avg_price"] * o["volume"], volume=o["volume"],
+                entry_time=entry_time, entry_atr=0.0,
+            )
+            self.risk.on_open()
+            self.notifier.send(
+                f"🔧 오펀 복원: {o['market']} {o['volume']:.8f}개 @ {o['avg_price']:.0f} "
+                f"→ '{slot}' 슬롯에서 관리 (§9.3)")
+            self.logger.log("recover", strategy=slot, market=o["market"],
+                            price=o["avg_price"], volume=o["volume"],
+                            size_krw=o["avg_price"] * o["volume"], reason="orphan_recovered")
 
     # ── 1 tick ───────────────────────────────────────────────
     def tick(self) -> None:
@@ -131,8 +164,9 @@ class Trader:
         if krw < C.MIN_ORDER_KRW:
             return
         res = self.orders.enter_long(market, price, krw)   # §6
-        if not res.ok:
-            self.logger.log("entry_fail", strategy=name, market=market, reason=res.error)
+        if not res.ok or res.filled_volume <= 0:
+            self.logger.log("entry_fail", strategy=name, market=market,
+                            reason=res.error or "no fill")
             return
         entry_atr = float(ta.atr(df).iloc[-1]) if len(df) >= 14 else 0.0
         self.positions[name] = Position(
@@ -146,12 +180,37 @@ class Trader:
 
     def _close(self, pos: Position, price: float, reason: ExitReason, note: str = "") -> None:
         res = self.orders.exit_position(pos, price, reason)    # §6
+        filled = res.filled_volume
+
+        # 청산 실패(체결 0) → 포지션 유지. exit 로 기록하지 않는다(오펀 desync 방지).
+        if not res.ok or filled <= 0:
+            self.logger.log("exit_fail", strategy=pos.strategy, market=pos.market,
+                            volume=pos.volume, reason=f"{reason.value}:{res.error}")
+            self.notifier.send(
+                f"⚠️ 청산 실패 {pos.market} ({reason.value}): {res.error or '체결 0'} "
+                f"— 포지션 유지, 다음 tick 재시도")
+            return
+
+        # 부분 체결 판정. 남은 잔량의 평가액이 최소주문금액 미만이면 '먼지'로 보고 청산 완료 처리
+        # (거래 불가능한 잔량으로 매 tick 무한 재청산·로그 스팸 방지).
+        fill_price = res.avg_price or price
+        remaining = pos.volume - filled
+        if remaining > pos.volume * 1e-9 and remaining * fill_price >= C.MIN_ORDER_KRW:
+            pos.volume = remaining
+            pos.size_krw = pos.entry_price * pos.volume
+            self.logger.log("exit_partial", strategy=pos.strategy, market=pos.market,
+                            price=fill_price, volume=filled,
+                            reason=f"{reason.value}:부분체결 잔량 {pos.volume:.8f}")
+            self.notifier.send(
+                f"⚠️ 부분 청산 {pos.market}: {filled:.8f} 체결, 잔량 {pos.volume:.8f} 유지")
+            return
+
         fill_price = res.avg_price or price
         pnl = pos.pnl_krw(fill_price)
         self.risk.on_close(pnl)                                 # §5 상태 갱신
         self.positions.pop(pos.strategy, None)
         self.logger.log("exit", strategy=pos.strategy, market=pos.market,
-                        price=fill_price, volume=pos.volume, pnl_krw=pnl,
+                        price=fill_price, volume=filled, pnl_krw=pnl,
                         reason=f"{reason.value}:{note}")
         # 서킷 브레이커 발동 알림
         ok, why = self.risk.can_enter()

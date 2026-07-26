@@ -8,9 +8,9 @@ import sqlite3
 import threading
 import time
 import traceback
-from datetime import datetime, timezone
 
 from config.settings import settings
+from config.timeutil import now_kst_iso
 from bot.trader import Trader
 from bot.position import ExitReason
 
@@ -105,6 +105,22 @@ class BotService:
             })
         return out
 
+    def round_trips(self, limit: int = 50) -> list[dict]:
+        """
+        체결 내역(진입↔청산 묶음). 전략당 1포지션 원칙을 이용해 시간순으로 진입-청산을 짝짓는다.
+        각 행: 진입가/청산가/보유시간/손익/신호이유. (Task B)
+        """
+        try:
+            with sqlite3.connect(settings.db_path) as con:
+                con.row_factory = sqlite3.Row
+                rows = con.execute(
+                    "SELECT ts,event,strategy,market,price,volume,size_krw,pnl_krw,reason"
+                    " FROM trades WHERE event IN ('entry','exit') ORDER BY id ASC"
+                ).fetchall()
+        except sqlite3.OperationalError:
+            return []
+        return pair_round_trips([dict(r) for r in rows])[-limit:][::-1]
+
     # ── 킬 스위치 (헌장 §9.1) ────────────────────────────────
     def kill(self) -> dict:
         positions = list(self.trader.positions.values())
@@ -115,4 +131,43 @@ class BotService:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return now_kst_iso()
+
+
+def _hold_seconds(entry_ts: str, exit_ts: str) -> float | None:
+    """두 ISO 타임스탬프의 간격(초). 파싱 실패 시 None."""
+    from datetime import datetime
+    try:
+        return (datetime.fromisoformat(exit_ts) - datetime.fromisoformat(entry_ts)).total_seconds()
+    except (ValueError, TypeError):
+        return None
+
+
+def pair_round_trips(rows: list[dict]) -> list[dict]:
+    """
+    id 오름차순 이벤트 목록을 받아 (entry, exit) 쌍을 만든다.
+    전략당 동시 1포지션이므로 전략별로 진입을 열어두고 다음 청산에 매칭한다.
+    exit 만 있고 대응 entry 가 없으면(과거 데이터 경계) 진입 정보는 빈 값으로 둔다.
+    """
+    open_by_strat: dict[str, dict] = {}
+    trips: list[dict] = []
+    for r in rows:
+        strat = r.get("strategy") or ""
+        if r["event"] == "entry":
+            open_by_strat[strat] = r
+        elif r["event"] == "exit":
+            e = open_by_strat.pop(strat, None)
+            trips.append({
+                "strategy": strat,
+                "market": r.get("market") or (e.get("market") if e else ""),
+                "entry_ts": e["ts"] if e else None,
+                "exit_ts": r["ts"],
+                "entry_price": e["price"] if e else None,
+                "exit_price": r["price"],
+                "size_krw": e["size_krw"] if e else r.get("size_krw"),
+                "pnl_krw": r.get("pnl_krw"),
+                "hold_sec": _hold_seconds(e["ts"], r["ts"]) if e else None,
+                "entry_reason": e.get("reason") if e else None,
+                "exit_reason": r.get("reason"),
+            })
+    return trips
