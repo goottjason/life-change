@@ -9,6 +9,8 @@ import threading
 import time
 import traceback
 
+from config import charter as C
+from config.charter import STRATEGY_SPECS
 from config.settings import settings
 from config.timeutil import now_kst_iso
 from bot.trader import Trader
@@ -57,6 +59,8 @@ class BotService:
             "running": self._running,
             "dry_run": settings.dry_run,
             "mode": "DRY_RUN(모의)" if settings.dry_run else "LIVE(실전)",
+            "charter_version": C.CHARTER_VERSION,
+            "active_strategies": list(C.ACTIVE_STRATEGIES),
             "started_at": self.started_at,
             "last_tick_at": self.last_tick_at,
             "tick_count": self.tick_count,
@@ -66,56 +70,104 @@ class BotService:
         }
         return snap
 
-    def trades(self, limit: int = 50) -> list[dict]:
+    # ── 전략 세대 분리 (v1.5) ────────────────────────────────
+    # 헌장 v1.3에서 전략을 macd/rsi/cvd → rsi2 계열로 **완전히 교체**했다. 과거 전략의 거래
+    # 기록을 현재 성과와 섞으면 승률·손익이 무의미해지므로, 기본 조회는 **현재 가동 전략만**
+    # 본다. 과거 기록은 지우지 않고 scope="all" 로 볼 수 있게 남긴다(§10.5 기록 보존).
+    @staticmethod
+    def _scope_clause(scope: str) -> tuple[str, tuple]:
+        if scope == "all":
+            return "", ()
+        names = tuple(C.ACTIVE_STRATEGIES)
+        holders = ",".join("?" * len(names))
+        return f" AND strategy IN ({holders})", names
+
+    def trades(self, limit: int = 50, scope: str = "current",
+               events: str = "meaningful") -> list[dict]:
+        """
+        events="meaningful": entry/exit/exit_fail/recover 만. 기본값으로 둔 이유는
+        과거 entry_fail 로그가 1,100건 넘게 쌓여 있어(잔고부족 스팸) 목록을 덮기 때문이다.
+        """
+        where = "WHERE 1=1"
+        params: list = []
+        if events == "meaningful":
+            where += " AND event IN ('entry','exit','exit_partial','exit_fail','recover')"
+        clause, sp = self._scope_clause(scope)
+        where += clause
+        params += list(sp)
         try:
             with sqlite3.connect(settings.db_path) as con:
                 con.row_factory = sqlite3.Row
                 rows = con.execute(
                     "SELECT ts,event,strategy,market,price,volume,size_krw,pnl_krw,reason"
-                    " FROM trades ORDER BY id DESC LIMIT ?", (limit,)
+                    f" FROM trades {where} ORDER BY id DESC LIMIT ?", (*params, limit)
                 ).fetchall()
             return [dict(r) for r in rows]
         except sqlite3.OperationalError:
             return []  # 아직 거래 없음
 
-    def stats(self) -> list[dict]:
-        """전략별 집계 (헌장 §10.3 주간 리뷰 근거)."""
+    def stats(self, scope: str = "current") -> list[dict]:
+        """전략별 집계 (헌장 §10.3 주간 리뷰 근거). 손익비·PF까지 계산해 §11 기준과 대조 가능하게."""
+        clause, sp = self._scope_clause(scope)
         try:
             with sqlite3.connect(settings.db_path) as con:
                 con.row_factory = sqlite3.Row
-                rows = con.execute("""
+                rows = con.execute(f"""
                     SELECT strategy,
                            COUNT(*) AS trades,
                            SUM(CASE WHEN pnl_krw > 0 THEN 1 ELSE 0 END) AS wins,
-                           ROUND(SUM(pnl_krw)) AS total_pnl
-                    FROM trades WHERE event='exit' GROUP BY strategy
-                """).fetchall()
+                           ROUND(SUM(pnl_krw)) AS total_pnl,
+                           ROUND(SUM(CASE WHEN pnl_krw > 0 THEN pnl_krw ELSE 0 END)) AS gross_win,
+                           ROUND(-SUM(CASE WHEN pnl_krw <= 0 THEN pnl_krw ELSE 0 END)) AS gross_loss
+                    FROM trades WHERE event='exit'{clause} GROUP BY strategy
+                """, sp).fetchall()
         except sqlite3.OperationalError:
             return []
         out = []
         for r in rows:
             trades = r["trades"] or 0
             wins = r["wins"] or 0
+            gw, gl = r["gross_win"] or 0, r["gross_loss"] or 0
+            spec = STRATEGY_SPECS.get(r["strategy"])
             out.append({
                 "strategy": r["strategy"],
+                "timeframe": spec.timeframe if spec else "",
+                "active": r["strategy"] in C.ACTIVE_STRATEGIES,
                 "trades": trades,
                 "wins": wins,
                 "win_rate": round(wins / trades * 100, 1) if trades else 0.0,
+                "profit_factor": round(gw / gl, 2) if gl else None,
                 "total_pnl": r["total_pnl"] or 0,
+                "avg_pnl": round((r["total_pnl"] or 0) / trades, 1) if trades else 0.0,
             })
         return out
 
-    def round_trips(self, limit: int = 50) -> list[dict]:
+    def expectations(self) -> dict:
+        """
+        백테스트 기대치 — 실전 성과를 여기에 대조해 괴리를 본다 (§10.4).
+        수치 출처: backtesting/research/README.md (2년·홀드아웃 17개월·실측 스프레드 반영).
+        """
+        return {
+            "rsi2": {"win_rate": 69.1, "profit_factor": 1.49, "exp_pct": 0.180,
+                     "trades_per_day": 0.78},
+            "rsi2_15m": {"win_rate": 73.9, "profit_factor": 1.96, "exp_pct": 0.489,
+                         "trades_per_day": 0.26},
+            "combined": {"win_rate": 70.3, "profit_factor": 1.64, "exp_pct": 0.259,
+                         "trades_per_day": 1.21, "account_2y_pct": 51.4, "mdd_pct": 6.2},
+        }
+
+    def round_trips(self, limit: int = 50, scope: str = "current") -> list[dict]:
         """
         체결 내역(진입↔청산 묶음). 전략당 1포지션 원칙을 이용해 시간순으로 진입-청산을 짝짓는다.
         각 행: 진입가/청산가/보유시간/손익/신호이유. (Task B)
         """
+        clause, sp = self._scope_clause(scope)
         try:
             with sqlite3.connect(settings.db_path) as con:
                 con.row_factory = sqlite3.Row
                 rows = con.execute(
                     "SELECT ts,event,strategy,market,price,volume,size_krw,pnl_krw,reason"
-                    " FROM trades WHERE event IN ('entry','exit') ORDER BY id ASC"
+                    f" FROM trades WHERE event IN ('entry','exit'){clause} ORDER BY id ASC", sp
                 ).fetchall()
         except sqlite3.OperationalError:
             return []
@@ -146,17 +198,20 @@ def _hold_seconds(entry_ts: str, exit_ts: str) -> float | None:
 def pair_round_trips(rows: list[dict]) -> list[dict]:
     """
     id 오름차순 이벤트 목록을 받아 (entry, exit) 쌍을 만든다.
-    전략당 동시 1포지션이므로 전략별로 진입을 열어두고 다음 청산에 매칭한다.
+
+    v1.4부터 한 전략이 서로 다른 코인에 동시 진입할 수 있으므로 **'전략:코인'** 으로 짝짓는다.
+    (전략명만으로 짝지으면 두 코인을 동시 보유할 때 진입가·손익이 뒤섞인다.)
     exit 만 있고 대응 entry 가 없으면(과거 데이터 경계) 진입 정보는 빈 값으로 둔다.
     """
-    open_by_strat: dict[str, dict] = {}
+    open_by_key: dict[str, dict] = {}
     trips: list[dict] = []
     for r in rows:
         strat = r.get("strategy") or ""
+        key = f"{strat}:{r.get('market') or ''}"
         if r["event"] == "entry":
-            open_by_strat[strat] = r
+            open_by_key[key] = r
         elif r["event"] == "exit":
-            e = open_by_strat.pop(strat, None)
+            e = open_by_key.pop(key, None)
             trips.append({
                 "strategy": strat,
                 "market": r.get("market") or (e.get("market") if e else ""),

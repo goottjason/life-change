@@ -45,3 +45,35 @@ def test_orphan_exit_without_entry_is_tolerated():
     assert len(trips) == 1
     assert trips[0]["entry_price"] is None
     assert trips[0]["hold_sec"] is None
+
+
+# ── v1.4: 한 전략이 여러 코인을 동시 보유 ────────────────────
+def test_same_strategy_two_markets_pair_by_market():
+    """
+    v1.4에서 '전략당 1포지션' 제약이 풀렸다. 전략명만으로 짝지으면 두 코인의
+    진입가·손익이 뒤섞이므로 '전략:코인'으로 짝지어야 한다.
+    """
+    rows = [
+        _row(1, "2026-07-26T09:00:00+09:00", "entry", "rsi2", "KRW-BTC", 100, reason="btc 진입"),
+        _row(2, "2026-07-26T09:05:00+09:00", "entry", "rsi2", "KRW-XRP", 500, reason="xrp 진입"),
+        _row(3, "2026-07-26T10:00:00+09:00", "exit", "rsi2", "KRW-XRP", 515, pnl=900, reason="reverse:"),
+        _row(4, "2026-07-26T11:00:00+09:00", "exit", "rsi2", "KRW-BTC", 102, pnl=600, reason="reverse:"),
+    ]
+    trips = {t["market"]: t for t in pair_round_trips(rows)}
+    assert trips["KRW-XRP"]["entry_price"] == 500 and trips["KRW-XRP"]["exit_price"] == 515
+    assert trips["KRW-BTC"]["entry_price"] == 100 and trips["KRW-BTC"]["exit_price"] == 102
+    assert trips["KRW-BTC"]["entry_reason"] == "btc 진입"
+    assert trips["KRW-XRP"]["hold_sec"] == 3300      # 55분
+
+
+def test_two_timeframe_strategies_same_market_are_separate():
+    """rsi2(5분)와 rsi2_15m(15분)이 같은 코인을 각각 들고 있어도 섞이지 않는다."""
+    rows = [
+        _row(1, "2026-07-26T09:00:00+09:00", "entry", "rsi2", "KRW-BTC", 100),
+        _row(2, "2026-07-26T09:00:00+09:00", "entry", "rsi2_15m", "KRW-BTC", 101),
+        _row(3, "2026-07-26T10:00:00+09:00", "exit", "rsi2_15m", "KRW-BTC", 104, pnl=900),
+        _row(4, "2026-07-26T10:30:00+09:00", "exit", "rsi2", "KRW-BTC", 103, pnl=600),
+    ]
+    trips = {t["strategy"]: t for t in pair_round_trips(rows)}
+    assert trips["rsi2"]["entry_price"] == 100 and trips["rsi2"]["exit_price"] == 103
+    assert trips["rsi2_15m"]["entry_price"] == 101 and trips["rsi2_15m"]["exit_price"] == 104

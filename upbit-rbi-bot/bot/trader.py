@@ -71,6 +71,8 @@ class Trader:
         self.regimes: dict[str, str] = {}          # 대시보드용 레짐 캐시
         self.trend_up: dict[str, bool] = {}        # 1시간봉 EMA200 추세 캐시 (rsi2 §2, v1.3)
         self._trend_at: dict[str, float] = {}      # 종목별 추세 갱신 시각(monotonic)
+        # {코인: {전략: {action, reason, rsi2, atr_pct, trend_up, gate}}} — 진입 진단 (v1.5)
+        self.signal_view: dict[str, dict] = {}
 
     # ── 부팅 (§9.3 상태 복구) ────────────────────────────────
     def boot(self) -> None:
@@ -240,6 +242,9 @@ class Trader:
             if not ok:
                 continue
             sig = strat.signal(df, ctx)
+            # 관찰용: 왜 진입하지 않았는지 대시보드에 노출 (§10, v1.5)
+            self.signal_view.setdefault(market, {})[name] = {
+                "action": sig.action.value, "reason": sig.reason, **sig.meta}
             if sig.action != Action.ENTER_LONG:
                 continue
             if self._is_duplicate(market):         # 동일코인 중복 금지 (§3.3)
@@ -361,6 +366,8 @@ class Trader:
             "dry_run": settings.dry_run,
             "forced_paper": forced_paper_reason(),
             "trend_up": dict(self.trend_up),        # 1시간봉 EMA200 위 여부 (진입 전제조건)
+            "signals": {m: dict(v) for m, v in self.signal_view.items()},   # 진입 진단 (v1.5)
+            "spread_rejected_new": list(getattr(self.screener, "rejected_new", [])),
             "spreads": {m: round(v * 100, 3) for m, v in
                         getattr(self.screener, "spreads", {}).items()},
             "spread_rejected": {m: round(v * 100, 3) for m, v in

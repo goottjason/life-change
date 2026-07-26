@@ -53,6 +53,7 @@ def bare_trader(strategies=("rsi2", "rsi2_15m")):
     t.regimes = {}
     t.trend_up = {}
     t._trend_at = {}
+    t.signal_view = {}
     t.logger = _Rec()
     t.notifier = _Null()
     t.strategies = build_strategies(strategies)

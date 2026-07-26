@@ -52,29 +52,36 @@ class Rsi2PullbackStrategy(BaseStrategy):
         if pd.isna(rsi2):
             return Signal(Action.HOLD, self.name, "rsi nan")
 
+        # 관찰용 수치 (대시보드에서 '어느 조건에 막혔는지' 보여준다 — 판단에는 쓰지 않음)
+        trend_up = self._trend_up(df, ctx)
+        atr_ratio = self._atr_ratio(df)
+        gate = self.spec.min_atr_ratio
+        meta = {"rsi2": round(float(rsi2), 1), "trend_up": trend_up, "gate": gate,
+                "atr_pct": None if atr_ratio is None else round(atr_ratio * 100, 3),
+                "timeframe": self.spec.timeframe}
+
         # 청산 판정을 먼저 하지 않는다: 진입 조건과 청산 조건은 겹치지 않으므로 순서 무관.
         if rsi2 >= EXIT_LEVEL:
-            return Signal(Action.EXIT, self.name, f"rsi2 {rsi2:.1f} >= {EXIT_LEVEL:.0f} 되돌림 완료")
+            return Signal(Action.EXIT, self.name,
+                          f"rsi2 {rsi2:.1f} >= {EXIT_LEVEL:.0f} 되돌림 완료", meta)
 
         if rsi2 > ENTRY_LEVEL:
-            return Signal(Action.HOLD, self.name, f"rsi2 {rsi2:.1f} (진입 {ENTRY_LEVEL:.0f} 이하)")
+            return Signal(Action.HOLD, self.name,
+                          f"rsi2 {rsi2:.1f} (진입 {ENTRY_LEVEL:.0f} 이하 대기)", meta)
 
-        trend_up = self._trend_up(df, ctx)
         if trend_up is None:
-            return Signal(Action.HOLD, self.name, "추세 판정 불가(1시간봉 미확보) — 진입 보류")
+            return Signal(Action.HOLD, self.name, "추세 판정 불가(1시간봉 미확보) — 진입 보류", meta)
         if not trend_up:
-            return Signal(Action.HOLD, self.name, "1시간봉 EMA200 아래 — 하락 추세 진입 금지")
+            return Signal(Action.HOLD, self.name, "1시간봉 EMA200 아래 — 하락 추세 진입 금지", meta)
 
-        atr_ratio = self._atr_ratio(df)
         if atr_ratio is None:
-            return Signal(Action.HOLD, self.name, "atr 계산 불가")
-        gate = self.spec.min_atr_ratio
+            return Signal(Action.HOLD, self.name, "atr 계산 불가", meta)
         if atr_ratio < gate:
             return Signal(Action.HOLD, self.name,
-                          f"변동성 부족 atr {atr_ratio:.3%} < {gate:.1%} (수수료 못 넘김)")
+                          f"변동성 부족 atr {atr_ratio:.3%} < {gate:.1%} (수수료 못 넘김)", meta)
 
         return Signal(Action.ENTER_LONG, self.name,
-                      f"rsi2 {rsi2:.1f}<={ENTRY_LEVEL:.0f} · 추세상승 · atr {atr_ratio:.2%}")
+                      f"rsi2 {rsi2:.1f}<={ENTRY_LEVEL:.0f} · 추세상승 · atr {atr_ratio:.2%}", meta)
 
     # ── 내부 ────────────────────────────────────────────────
     @staticmethod

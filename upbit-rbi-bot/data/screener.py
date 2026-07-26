@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import time
+from datetime import datetime, timedelta, timezone
 
 try:
     import requests
@@ -29,6 +30,7 @@ from config.settings import settings
 UPBIT_MARKET_ALL = "https://api.upbit.com/v1/market/all"
 UPBIT_TICKER = "https://api.upbit.com/v1/ticker"
 UPBIT_ORDERBOOK = "https://api.upbit.com/v1/orderbook"
+UPBIT_DAY_CANDLES = "https://api.upbit.com/v1/candles/days"
 
 
 def spread_ratio(unit: dict) -> float | None:
@@ -108,6 +110,9 @@ class Screener:
         self.exclude = exclude if exclude is not None else (C.STABLECOINS | C.UNIVERSE_BLACKLIST)
         self.max_spread = max_spread if max_spread is not None else C.MAX_SPREAD_RATIO
         self.min_depth_krw = C.MIN_TOP_DEPTH_KRW
+        self.min_listing_days = C.MIN_LISTING_DAYS
+        self._history_ok: dict[str, bool] = {}   # 상장 경과일 판정 캐시(상장일은 불변)
+        self.rejected_new: list[str] = []        # 신규 상장으로 제외된 종목
         self.notifier = notifier
         self._cache: list[str] = []
         self._last = None
@@ -127,6 +132,7 @@ class Screener:
             candidates = select_universe(self._fetch_tickers(),
                                          self.top_n * C.SPREAD_CANDIDATE_MULT,
                                          self.min_turnover, self.exclude)
+            candidates = self._apply_history_filter(candidates)   # 신규 상장 배제 (v1.5)
             picked = self._apply_spread_filter(candidates)[:self.top_n]
         except Exception:
             picked = []
@@ -141,6 +147,54 @@ class Screener:
             self._notify("⚠️ 스크리너 조회 실패 — 폴백 유니버스 사용 (§3)")
             self._in_fallback = True
         return self._cache or self.fallback
+
+    # ── 상장 경과일 필터 (§3, v1.5) ─────────────────────────
+    def _has_min_history(self, market: str) -> bool | None:
+        """
+        MIN_LISTING_DAYS 이전에도 일봉이 존재하는지 = 그때 이미 상장돼 있었는지.
+        True(충분)/False(신규 상장)/None(조회 실패 — 판정 불가).
+
+        **조회 실패를 False로 캐시하면 안 된다**: 레이트리밋 한 번에 ETH 같은 오래된 종목이
+        영구 제외돼 유니버스가 비정상적으로 줄어든다(실제로 그 버그를 겪었다).
+        확정 응답만 메모이즈하고(상장일은 불변), 실패는 다음 주기에 다시 시도한다.
+        """
+        if market in self._history_ok:
+            return self._history_ok[market]
+        try:
+            cutoff = (datetime.now(timezone.utc)
+                      - timedelta(days=self.min_listing_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            r = requests.get(UPBIT_DAY_CANDLES,
+                             params={"market": market, "count": 1, "to": cutoff}, timeout=5)
+            r.raise_for_status()
+            ok = bool(r.json())
+        except Exception:
+            return None                      # 판정 불가 — 캐시하지 않음
+        self._history_ok[market] = ok
+        return ok
+
+    def _apply_history_filter(self, markets: list[str]) -> list[str]:
+        """상장 경과일이 확인된 종목만 남긴다. 판정 불가(API 실패)는 이번 주기에서만 보류."""
+        kept, new_listings, unknown = [], [], []
+        for m in markets:
+            if m in self._history_ok:                 # 캐시 히트는 요청하지 않는다
+                (kept if self._history_ok[m] else new_listings).append(m)
+                continue
+            time.sleep(0.15)                          # 레이트리밋 회피 (≈6.7 req/s)
+            res = self._has_min_history(m)
+            if res is True:
+                kept.append(m)
+            elif res is False:
+                new_listings.append(m)
+            else:
+                unknown.append(m)
+        self.rejected_new = new_listings
+        if new_listings:
+            print(f"[screener] 상장 {self.min_listing_days}일 미만 제외: "
+                  f"{', '.join(m.replace('KRW-', '') for m in new_listings)}")
+        if unknown:
+            print(f"[screener] 상장일 확인 실패(다음 주기 재시도): "
+                  f"{', '.join(m.replace('KRW-', '') for m in unknown)}")
+        return kept
 
     def _apply_spread_filter(self, candidates: list[str]) -> list[str]:
         """

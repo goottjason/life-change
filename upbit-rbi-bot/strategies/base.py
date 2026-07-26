@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 import pandas as pd
@@ -24,6 +24,9 @@ class Signal:
     action: Action
     strategy: str
     reason: str = ""       # 로깅용 (헌장 §10.1)
+    meta: dict = field(default_factory=dict)
+    """관찰용 수치 (v1.5). 대시보드에서 '왜 진입하지 않는가'를 보여주기 위한 것으로,
+    매매 판단에는 쓰지 않는다. rsi2 는 {"rsi2","atr_pct","trend_up","gate"} 를 채운다."""
 
 
 class BaseStrategy(ABC):

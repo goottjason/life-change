@@ -93,11 +93,31 @@
       <div class="empty" id="posempty">보유 포지션 없음</div>
     </div>
     <div class="card">
-      <h2>전략별 성과</h2>
+      <h2>전략별 성과 <span class="chip" id="scopeChip">현재 전략</span>
+        <button class="theme-btn" id="scopeBtn" onclick="toggleScope()" style="float:right;font-size:11px">과거 기록 보기</button>
+      </h2>
       <div class="row-strats" id="strats"><div class="empty">데이터 없음</div></div>
-      <h2 style="border-top:1px solid var(--line)">레짐 / 시세</h2>
-      <div class="row-strats" id="regimes"><div class="empty">—</div></div>
+      <h2 style="border-top:1px solid var(--line)">백테스트 기대치 (대조용)</h2>
+      <div class="row-strats" id="expect"><div class="empty">—</div></div>
     </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h2>진입 진단 — 지금 왜 사지 않는가 <span class="chip">조건 3개 모두 충족 시에만 매수</span></h2>
+    <div class="scroll"><table id="sigtbl">
+      <thead><tr><th>마켓</th><th>전략(봉)</th><th>RSI(2)</th><th>변동성 ATR%</th><th>1시간 추세</th><th>상태</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="empty" id="sigempty">신호 진단 대기 중 (첫 tick 이후 표시)</div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h2>유니버스 / 호가 스프레드 <span class="chip">스프레드 ≤0.10% · 상장 1년+ 만 거래</span></h2>
+    <div class="scroll"><table id="unitbl">
+      <thead><tr><th>마켓</th><th>현재가</th><th>스프레드</th><th>왕복비용(수수료+스프레드)</th><th>상태</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="empty" id="uniempty">—</div>
   </div>
 
   <div class="card" style="margin-top:16px">
@@ -119,8 +139,9 @@
   </div>
 
   <div class="foot" id="foot">
-    매매 규칙 헌장 v1.1 기반 · 자본=계좌 잔고 연동(입금 시 자동 스케일) · 전략 MACD/RSI/CVD · 왕복 수수료 0.1% 반영<br>
-    ⚠️ 교육·연구용 자동매매. 모든 파라미터는 출발 기본값이며 투자 손실 위험이 있습니다. 자동 갱신 5초.
+    <span id="footRule">헌장 —</span> · 자본=계좌 잔고 연동 · <b>RSI(2)≤3 + 1시간봉 EMA200 위 + 변동성 게이트</b> 진입 / RSI(2)≥70·±손절·8시간 청산<br>
+    거래 종목은 <b>호가 스프레드 ≤0.10% + 상장 1년 이상</b>만 (저가 코인은 호가 왕복비용이 기댓값을 초과) · 왕복 수수료 0.1% + 스프레드 반영<br>
+    ⚠️ 변동성이 낮은 국면에서는 <b>거래가 없는 것이 정상</b>입니다(게이트 미충족). 실투자 손실 위험이 있습니다. 자동 갱신 5초.
   </div>
 </div>
 
@@ -131,15 +152,26 @@ const won0 = n => Math.round(n).toLocaleString("ko-KR") + "원";
 const pct = n => (n>0?"+":"") + n.toFixed(2) + "%";
 const cls = n => n>0?"pos":(n<0?"neg":"");
 
+let SCOPE = "current";   // current=현재 가동 전략만 / all=과거 전략 포함
+function toggleScope(){
+  SCOPE = SCOPE==="current" ? "all" : "current";
+  document.getElementById("scopeChip").textContent = SCOPE==="current"?"현재 전략":"전체 기록(과거 포함)";
+  document.getElementById("scopeBtn").textContent = SCOPE==="current"?"과거 기록 보기":"현재 전략만 보기";
+  refresh();
+}
+
 async function refresh(){
   try{
-    const [st, tr, sta, rt] = await Promise.all([
+    const q = "&scope="+SCOPE;
+    const [st, tr, sta, rt, ex] = await Promise.all([
       fetch(BASE+"/api/status").then(r=>r.json()),
-      fetch(BASE+"/api/trades?limit=30").then(r=>r.json()),
-      fetch(BASE+"/api/stats").then(r=>r.json()),
-      fetch(BASE+"/api/roundtrips?limit=30").then(r=>r.json()),
+      fetch(BASE+"/api/trades?limit=30"+q).then(r=>r.json()),
+      fetch(BASE+"/api/stats?scope="+SCOPE).then(r=>r.json()),
+      fetch(BASE+"/api/roundtrips?limit=30"+q).then(r=>r.json()),
+      fetch(BASE+"/api/expectations").then(r=>r.json()),
     ]);
-    renderStatus(st); renderTrades(tr); renderStats(sta); renderRoundTrips(rt);
+    renderStatus(st); renderTrades(tr); renderStats(sta, ex); renderRoundTrips(rt);
+    renderSignals(st); renderUniverse(st); renderExpect(ex);
   }catch(e){
     document.getElementById("running").textContent = "연결 실패";
   }
@@ -183,21 +215,99 @@ function renderStatus(s){
   document.getElementById("posempty").style.display = s.positions.length?"none":"block";
   document.querySelector("#postbl").style.display = s.positions.length?"table":"none";
 
-  // regimes / prices
-  const reg=Object.entries(s.regimes||{});
-  document.getElementById("regimes").innerHTML = reg.length? reg.map(([m,g])=>`
-    <div class="strat"><div class="n">${m}</div>
-    <div class="m"><span class="chip ${g}">${g}</span> ${(s.prices[m]||0).toLocaleString()}원</div></div>`).join("")
-    : `<div class="empty">아직 시세 수신 전</div>`;
+  // 헌장/전략 메타 (레짐 표시는 v1.4에서 제거 — 레짐 필터를 쓰지 않는다)
+  const tfName = t => ({minute5:"5분봉", minute15:"15분봉", minute60:"1시간봉"}[t] || t);
+  document.getElementById("footRule").textContent =
+    `헌장 ${bot.charter_version||"—"} · 전략 ${(bot.active_strategies||[]).join(" + ")}`;
+  if(s.forced_paper){
+    const h=document.getElementById("halt");
+    h.style.display="block";
+    h.textContent="🧪 모의 모드로 강제됨 — "+s.forced_paper+" (주문 미전송)";
+  }
+  window.__tfName = tfName;
 }
 
-function renderStats(list){
+// 진입 진단: 조건 3개 중 무엇에 막혔는지 보여준다
+function renderSignals(s){
+  const rows=[];
+  const sig = s.signals || {};
+  for(const [m, byStrat] of Object.entries(sig)){
+    for(const [name, d] of Object.entries(byStrat)){
+      const gate = (d.gate!=null? (d.gate*100).toFixed(1)+"%" : "—");
+      const atr  = (d.atr_pct!=null? d.atr_pct.toFixed(3)+"%" : "—");
+      const atrOk = (d.atr_pct!=null && d.gate!=null) ? (d.atr_pct >= d.gate*100) : null;
+      const trend = d.trend_up===true?'<span class="chip trend">상승 ✅</span>'
+                  : d.trend_up===false?'<span class="chip range">하락 ❌</span>'
+                  : '<span class="chip">확인불가</span>';
+      const rsiOk = (d.rsi2!=null && d.rsi2<=3);
+      const enter = d.action==="enter_long";
+      rows.push(`<tr>
+        <td>${m.replace("KRW-","")}</td>
+        <td>${name} <span class="chip">${(window.__tfName||(x=>x))(d.timeframe||"")}</span></td>
+        <td class="${rsiOk?'pos':''}">${d.rsi2!=null?d.rsi2.toFixed(1):"—"} ${rsiOk?"✅":""}</td>
+        <td class="${atrOk?'pos':(atrOk===false?'neg':'')}">${atr} <span style="color:var(--muted)">/ ${gate}</span> ${atrOk?"✅":(atrOk===false?"❌":"")}</td>
+        <td>${trend}</td>
+        <td style="text-align:left;color:${enter?'var(--pos)':'var(--muted)'}">${enter?"🟢 진입 신호":d.reason||""}</td>
+      </tr>`);
+    }
+  }
+  document.querySelector("#sigtbl tbody").innerHTML = rows.join("");
+  document.getElementById("sigempty").style.display = rows.length?"none":"block";
+  document.querySelector("#sigtbl").style.display = rows.length?"table":"none";
+}
+
+// 유니버스: 스프레드 통과/제외를 한눈에
+function renderUniverse(s){
+  const uni = new Set(s.universe||[]);
+  const spreads = s.spreads||{}, rejected = s.spread_rejected||{}, newly = new Set(s.spread_rejected_new||[]);
+  const all = new Set([...Object.keys(spreads), ...Object.keys(rejected), ...uni, ...newly]);
+  const rows=[...all].map(m=>{
+    const sp = spreads[m] ?? rejected[m];
+    const cost = sp!=null ? (0.1 + sp) : null;
+    let state, klass="";
+    if(uni.has(m)){ state="🟢 거래 대상"; klass="pos"; }
+    else if(newly.has(m)){ state="신규 상장/히스토리 부족 제외"; }
+    else if(sp!=null && sp>0.1){ state="스프레드 초과 제외"; klass="neg"; }
+    else { state="후보(미선정)"; }
+    return {m, sp, cost, state, klass, on:uni.has(m)};
+  }).sort((a,b)=> (b.on-a.on) || ((a.sp??9)-(b.sp??9)));
+  document.querySelector("#unitbl tbody").innerHTML = rows.map(r=>`<tr>
+    <td>${r.m.replace("KRW-","")}</td>
+    <td>${(s.prices||{})[r.m]!=null?Math.round(s.prices[r.m]).toLocaleString()+"원":"—"}</td>
+    <td class="${r.klass}">${r.sp!=null?r.sp.toFixed(3)+"%":"—"}</td>
+    <td>${r.cost!=null?r.cost.toFixed(3)+"%":"—"}</td>
+    <td style="text-align:left">${r.state}</td></tr>`).join("");
+  const has=rows.length;
+  document.getElementById("uniempty").style.display = has?"none":"block";
+  document.querySelector("#unitbl").style.display = has?"table":"none";
+}
+
+// 백테스트 기대치 (실전 대조용)
+function renderExpect(ex){
+  const rows=[["rsi2","5분봉"],["rsi2_15m","15분봉"],["combined","병행 합계"]];
+  document.getElementById("expect").innerHTML = rows.map(([k,label])=>{
+    const e=ex[k]||{};
+    return `<div class="strat"><div class="n">${label}</div>
+      <div class="m">승률 ${e.win_rate}% · PF ${e.profit_factor}<br>
+      거래당 +${e.exp_pct}% · 하루 ${e.trades_per_day}회</div></div>`;
+  }).join("");
+}
+
+function renderStats(list, ex){
   const el=document.getElementById("strats");
-  if(!list.length){el.innerHTML='<div class="empty">청산된 거래 없음</div>';return;}
-  el.innerHTML = list.map(s=>`<div class="strat">
-    <div class="n">${s.strategy.toUpperCase()}</div>
-    <div class="m">${s.trades}거래 · 승률 ${s.win_rate}%<br>
-    <span class="${cls(s.total_pnl)}">${won(s.total_pnl)}</span></div></div>`).join("");
+  if(!list.length){
+    el.innerHTML='<div class="empty">청산된 거래 없음 — 조건 충족 시 자동 진입합니다</div>';return;
+  }
+  el.innerHTML = list.map(s=>{
+    const e=(ex||{})[s.strategy]||{};
+    const wrGap = e.win_rate!=null && s.trades>=5 ? ` <span style="color:var(--muted)">(기대 ${e.win_rate}%)</span>`:"";
+    const pf = s.profit_factor!=null? s.profit_factor : "—";
+    return `<div class="strat">
+    <div class="n">${s.strategy}${s.active?"":" <span class='chip'>비활성</span>"}</div>
+    <div class="m">${s.trades}거래 · 승률 ${s.win_rate}%${wrGap}<br>
+    PF ${pf} · 평균 ${s.avg_pnl>0?"+":""}${s.avg_pnl}원<br>
+    <span class="${cls(s.total_pnl)}">${won(s.total_pnl)}</span></div></div>`;
+  }).join("");
 }
 
 function renderTrades(list){

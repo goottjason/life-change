@@ -50,6 +50,10 @@ class FakeScreener(Screener):
         self._tickers = tickers
         self._books = books
         self.orderbook_calls = 0
+        # 상장 경과일 필터(v1.5)는 여기서 검증 대상이 아니다 → 전부 '충분'으로 캐시해
+        # 네트워크 조회를 타지 않게 한다(별도 테스트: test_listing_filter.py).
+        for t in tickers:
+            self._history_ok[t["market"]] = True
 
     def _fetch_tickers(self):
         return self._tickers

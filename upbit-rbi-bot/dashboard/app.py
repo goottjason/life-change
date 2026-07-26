@@ -3,8 +3,9 @@
   GET  /life-change/            → 대시보드 HTML
   GET  /life-change/health      → CI 헬스체크
   GET  /life-change/api/status  → 봇 실시간 상태(JSON)
-  GET  /life-change/api/trades  → 최근 거래
-  GET  /life-change/api/stats   → 전략별 집계
+  GET  /life-change/api/trades  → 최근 거래 (scope=current|all)
+  GET  /life-change/api/stats   → 전략별 집계 (scope=current|all)
+  GET  /life-change/api/expectations → 백테스트 기대치(실전 대조용)
   POST /life-change/api/kill    → 킬 스위치 (DASHBOARD_TOKEN 필요)
 """
 from __future__ import annotations
@@ -47,18 +48,25 @@ def api_status() -> dict:
 
 
 @app.get(PREFIX + "/api/trades")
-def api_trades(limit: int = 50) -> list[dict]:
-    return service.trades(min(limit, 200))
+def api_trades(limit: int = 50, scope: str = "current", events: str = "meaningful") -> list[dict]:
+    """scope=current(기본, 현재 가동 전략만) | all(과거 전략 포함)"""
+    return service.trades(min(limit, 200), scope=scope, events=events)
 
 
 @app.get(PREFIX + "/api/stats")
-def api_stats() -> list[dict]:
-    return service.stats()
+def api_stats(scope: str = "current") -> list[dict]:
+    return service.stats(scope=scope)
+
+
+@app.get(PREFIX + "/api/expectations")
+def api_expectations() -> dict:
+    """백테스트 기대치 — 실전 성과 대조용 (§10.4)"""
+    return service.expectations()
 
 
 @app.get(PREFIX + "/api/roundtrips")
-def api_roundtrips(limit: int = 50) -> list[dict]:
-    return service.round_trips(min(limit, 200))
+def api_roundtrips(limit: int = 50, scope: str = "current") -> list[dict]:
+    return service.round_trips(min(limit, 200), scope=scope)
 
 
 @app.post(PREFIX + "/api/kill")

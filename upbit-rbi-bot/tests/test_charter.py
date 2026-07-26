@@ -90,3 +90,14 @@ def test_스프레드_상한과_추세갱신주기():
 def test_tiny_capital_returns_below_min_order():
     # 자본/잔고가 너무 작으면 MIN_ORDER 미만을 반환(강제로 올리지 않음) → 호출측이 스킵
     assert C.position_size_krw(0.03, 100_000, available_krw=1_000) < C.MIN_ORDER_KRW
+
+
+def test_대시보드_전략세대_분리():
+    """
+    v1.3에서 전략을 완전히 교체했으므로 대시보드 기본 조회는 현재 가동 전략만 봐야 한다
+    (과거 macd/rsi/cvd 기록이 섞이면 승률·손익이 무의미해진다).
+    """
+    from dashboard.service import BotService
+    clause, params = BotService._scope_clause("current")
+    assert "strategy IN" in clause and set(params) == set(C.ACTIVE_STRATEGIES)
+    assert BotService._scope_clause("all") == ("", ())
