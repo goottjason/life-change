@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
-CHARTER_VERSION = "v2.0"
+CHARTER_VERSION = "v2.1"
 
 # ── 자본·수수료 (헌장 §1, §13) ────────────────────────────────
 # 자본은 더 이상 고정값이 아니라 '실계좌 잔고(총 자산)'를 런타임에 읽어서 쓴다 (헌장 v1.1 §7.1).
@@ -70,8 +70,13 @@ STABLECOINS = {"USDT", "USDC", "DAI", "TUSD", "BUSD"}
 # KAITO (v1.9): 스프레드는 0.085%로 통과하지만 **2년 백테스트에서 음의 기댓값**
 #   (5분봉 −0.066%/247거래, 15분봉 −0.001%/106거래, 가중 −0.046%/353거래 — lab_universe.py).
 #   비용이 아니라 신호가 이 종목에서 안 먹히는 경우다.
-UNIVERSE_BLACKLIST: set[str] = {"LPT", "ICP", "AXS", "KAITO"}
-
+UNIVERSE_BLACKLIST: set[str] = {
+    # 비용 초과(스프레드 중앙값이 상한 초과, 8회 샘플링): LPT 0.245% · ICP 0.190% · AXS 0.153%
+    "LPT", "ICP", "AXS",
+    # 신호 부적합 — 스프레드는 통과하나 2년 백테스트에서 **양쪽 타임프레임 모두 음수** (v2.1):
+    #   KAITO 5분 −0.065%/15분 −0.000% · GAS 15분 −0.019% · TRUMP 15분 −0.524% · TRX 15분 −0.265%
+    "KAITO", "GAS", "TRUMP", "TRX",
+}
 
 # 호가 스프레드 상한 (v1.3) — 거래대금만 보면 안 되는 이유:
 # 업비트 KRW는 가격대별 호가 단위(tick)가 고정이라 **가격이 낮은 코인은 한 틱이 이미 0.2~0.9%**다.
@@ -108,6 +113,44 @@ MIN_TOP_DEPTH_KRW = 30_000
 # 미검증 종목을 선호하는 선택 편향이 생긴다. 검증은 2년 히스토리 종목에서만 했으므로,
 # 최소 1년 이상 데이터가 있는 종목만 거래한다.
 MIN_LISTING_DAYS = 365
+
+# ── 검증된 종목만 거래 (§3.2-i, v2.1) ────────────────────────
+# 헌장 §0.3 "검증 없이 투입 없음". 스프레드가 좁아도 신호가 안 먹히는 종목이 있으므로
+# (KAITO: 스프레드 0.084%인데 5분 −0.065%·15분 −0.000%), **개별 백테스트를 통과한 종목만**
+# 거래한다. 새 종목을 추가하려면 `backtesting/research/lab_universe.py` 로 검증한 뒤 등록한다.
+# 값 = 그 종목에 허용하는 스프레드 상한(검증에 사용한 보수적 스프레드 이상으로는 두지 않는다).
+REQUIRE_VALIDATED_MARKET = True
+VALIDATED_MARKETS: dict[str, float] = {
+    # 5분봉·15분봉 모두 양수 (검증 스프레드 ≤0.1%)
+    "BTC": 0.001, "ETH": 0.001, "XRP": 0.001, "SOL": 0.001,
+    "BCH": 0.001, "LINK": 0.001, "ATOM": 0.001, "ORCA": 0.001,
+    # 15분봉만 양수 (5분봉은 STRATEGY_BLACKLIST 로 금지)
+    "AVAX": 0.0025, "ETC": 0.0025, "DOT": 0.0025, "ENS": 0.0025, "SUI": 0.0025,
+    "NEAR": 0.001,
+}
+
+# ── 종목별 허용 타임프레임 (§3.2-h, v2.1) ─────────────────────
+# 발견: **스프레드가 0.1%를 넘는 종목은 5분봉에서 전부 음수, 15분봉에서는 대부분 양수**다.
+# 5분봉은 한 봉 움직임(0.196%)이 작아 비용에 민감하고, 15분봉(0.323%)은 비용을 감당한다.
+# 그래서 종목을 차단하는 대신 **허용 타임프레임을 종목별로 다르게** 둔다.
+#
+# 2년 백테스트 결과(보수적 스프레드 = 관측 중 더 넓은 값, 라이브와 동일 파라미터):
+#   5분+15분 모두 양수: ATOM +0.165/+0.908 · BCH +0.194/+0.670 · LINK +0.092/+0.395
+#                       SOL +0.209/+0.739 · XRP +0.158/+0.361 · ORCA +0.029/+0.061
+#                       BTC +0.659/+2.833 · ETH +0.568/+0.644 (표본 적으나 강한 양수)
+#   15분봉만 양수:      AVAX −0.096/+0.560 · ETC −0.034/+0.507 · DOT −0.047/+0.371
+#                       ENS −0.066/+0.174 · SUI −0.077/+0.103 · NEAR −0.034/+0.149
+STRATEGY_BLACKLIST: dict[str, set[str]] = {
+    "rsi2": {"AVAX", "ETC", "DOT", "ENS", "SUI", "NEAR"},   # 5분봉 음수 종목
+}
+
+# 15분봉 검증을 통과한 종목은 스프레드 상한을 완화한다(5분봉은 위 STRATEGY_BLACKLIST 로 금지).
+# 미검증 종목에는 적용하지 않는다 — 검증 없이 넓은 스프레드를 허용하면 TRUMP(−0.524%) 같은
+# 종목이 들어온다.
+# (스프레드 상한은 VALIDATED_MARKETS 값으로 통합했다 — 종목별 상한이 곧 검증 조건이다)
+WIDE_SPREAD_ALLOWED: dict[str, float] = {
+    k: v for k, v in VALIDATED_MARKETS.items() if v > MAX_SPREAD_RATIO
+}
 
 # 투자경고·투자주의 종목 제외 (v2.0) — 업비트가 `market/all?isDetails=true` 로 제공한다.
 # 경고(warning): 상장폐지 검토 등. 주의(caution): 가격급등락·거래량급증·소수계정 집중 등 조작 징후.
@@ -221,6 +264,17 @@ def stop_ratio_from_atr(atr_stop_mult: float, entry_atr: float, entry_price: flo
     if entry_price > 0 and entry_atr > 0:
         return max(atr_stop_mult * entry_atr / entry_price, MIN_STOP_RATIO)
     return FALLBACK_STOP_RATIO
+
+
+def strategy_spread_cap(strategy: str) -> float:
+    """전략별 스프레드 상한 (§3.2-h, v2.1).
+
+    5분봉(rsi2)은 한 봉 움직임이 작아 비용에 민감하므로 기본 상한(0.1%)을 그대로 쓴다.
+    15분봉(rsi2_15m)은 검증 통과 종목에 한해 완화된 상한(WIDE_SPREAD_ALLOWED)까지 허용한다 —
+    상한 자체는 종목별로 `screener.cap_for` 가 판단하므로 여기서는 기본값을 반환한다.
+    """
+    return MAX_SPREAD_RATIO if strategy == "rsi2" else max(
+        [MAX_SPREAD_RATIO, *WIDE_SPREAD_ALLOWED.values()])
 
 
 def stop_ratio_for(spec: StrategySpec, entry_atr: float, entry_price: float) -> float:

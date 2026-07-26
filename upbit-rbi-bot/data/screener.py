@@ -55,6 +55,15 @@ def top_depth_krw(unit: dict) -> float:
         return 0.0
 
 
+def cap_for(market: str, default_cap: float) -> float:
+    """종목별 스프레드 상한 (§3.2-h, v2.1).
+
+    15분봉 검증을 통과한 종목은 완화된 상한을 쓴다(그 종목은 5분봉 진입이 금지된다).
+    미검증 종목에는 기본 상한을 그대로 적용한다.
+    """
+    return C.WIDE_SPREAD_ALLOWED.get(market.split("-", 1)[-1], default_cap)
+
+
 def filter_by_spread(books: list[dict], max_spread: float,
                      min_depth_krw: float = 0.0) -> tuple[list[str], dict[str, float]]:
     """
@@ -74,7 +83,7 @@ def filter_by_spread(books: list[dict], max_spread: float,
         if s is None:
             continue
         measured[market] = s
-        if s > max_spread:
+        if s > cap_for(market, max_spread):
             continue
         if min_depth_krw and top_depth_krw(units[0]) < min_depth_krw:
             continue
@@ -140,6 +149,7 @@ class Screener:
         self._spread_hist: dict[str, list[float]] = {}   # 종목별 스프레드 관측 이력 (v1.7)
         self.rejected_unstable: list[str] = []   # 스프레드 변동이 큰 종목
         self.rejected_flagged: list[str] = []    # 투자경고/주의로 제외된 종목
+        self.skipped_unvalidated = 0             # 미검증으로 제외된 후보 수
 
     def _notify(self, msg):
         self.notifier.send(msg) if self.notifier else print(msg)
@@ -161,6 +171,7 @@ class Screener:
                     print("[screener] 투자경고/주의 제외: " + ", ".join(
                         m.replace("KRW-", "") for m in dropped))
                 candidates = [m for m in candidates if m not in flagged]
+            candidates = self._validated_only(candidates)         # 검증 종목만 (§3.2-i, v2.1)
             candidates = self._apply_history_filter(candidates)   # 신규 상장 배제 (v1.5)
             picked = self._apply_spread_filter(candidates)[:self.top_n]
         except Exception:
@@ -176,6 +187,18 @@ class Screener:
             self._notify("⚠️ 스크리너 조회 실패 — 폴백 유니버스 사용 (§3)")
             self._in_fallback = True
         return self._cache or self.fallback
+
+    def _validated_only(self, candidates: list[str]) -> list[str]:
+        """
+        헌장 §0.3 "검증 없이 투입 없음" — 개별 백테스트를 통과한 종목만 남긴다 (§3.2-i, v2.1).
+        스프레드가 좁아도 신호가 안 먹히는 종목이 있다(KAITO: 0.084%인데 양쪽 타임프레임 음수).
+        새 종목은 `lab_universe.py` 로 검증한 뒤 charter.VALIDATED_MARKETS 에 등록한다.
+        """
+        if not (C.REQUIRE_VALIDATED_MARKET and getattr(self, "_require_validated", True)):
+            return candidates
+        kept = [m for m in candidates if m.split("-", 1)[-1] in C.VALIDATED_MARKETS]
+        self.skipped_unvalidated = len(candidates) - len(kept)
+        return kept
 
     # ── 상장 경과일 필터 (§3, v1.5) ─────────────────────────
     def _has_min_history(self, market: str) -> bool | None:
@@ -277,8 +300,9 @@ class Screener:
         hist = self._spread_hist.get(market, [])
         if len(hist) < C.SPREAD_HISTORY_MIN_SAMPLES:
             return True
-        return (statistics.median(hist) <= self.max_spread
-                and max(hist) <= self.max_spread * C.SPREAD_MAX_MULT)
+        cap = cap_for(market, self.max_spread)
+        return (statistics.median(hist) <= cap
+                and max(hist) <= cap * C.SPREAD_MAX_MULT)
 
     def spread_stats(self) -> dict[str, dict]:
         """대시보드용: 종목별 스프레드 중앙값·최댓값·관측수."""
@@ -298,18 +322,19 @@ class Screener:
                 return spread_ratio(b["orderbook_units"][0])
         return None
 
-    def tradable_now(self, market: str) -> tuple[bool, str]:
+    def tradable_now(self, market: str, cap: float | None = None) -> tuple[bool, str]:
         """
         주문 직전 호출용. 스프레드가 상한 이내인지 지금 다시 확인한다.
         유니버스는 10분 주기로 갱신되므로 스크리닝 시점 값은 최신이 아니다.
         조회 실패는 '확인 불가 → 진입 금지'로 처리한다(미확인 비용으로 실거래 금지).
         """
+        limit = cap if cap is not None else cap_for(market, self.max_spread)
         s = self.spread_now(market)
         if s is None:
             return False, "스프레드 확인 실패"
         self.spreads[market] = s
-        if s > self.max_spread:
-            return False, f"스프레드 {s:.3%} > 상한 {self.max_spread:.2%}"
+        if s > limit:
+            return False, f"스프레드 {s:.3%} > 상한 {limit:.2%}"
         return True, f"스프레드 {s:.3%}"
 
     def _fetch_orderbooks(self, markets: list[str]) -> list[dict]:

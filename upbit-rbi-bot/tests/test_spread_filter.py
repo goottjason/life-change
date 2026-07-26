@@ -43,10 +43,15 @@ def test_filter_빈_오더북_무시():
 
 
 class FakeScreener(Screener):
-    """네트워크 대신 주입된 응답을 쓰는 테스트용 스크리너."""
+    """네트워크 대신 주입된 응답을 쓰는 테스트용 스크리너.
+
+    v2.1의 '검증 종목만' 제한은 여기서 검증 대상이 아니므로 해제한다
+    (해당 규칙은 test_timeframe_rules.py 에서 검증).
+    """
 
     def __init__(self, tickers, books, **kw):
         super().__init__(**kw)
+        self._require_validated = False
         self._tickers = tickers
         self._books = books
         self.orderbook_calls = 0
@@ -57,6 +62,9 @@ class FakeScreener(Screener):
 
     def _fetch_tickers(self):
         return self._tickers
+
+    def _validated_only(self, candidates):
+        return candidates
 
     def _fetch_orderbooks(self, markets):
         self.orderbook_calls += 1

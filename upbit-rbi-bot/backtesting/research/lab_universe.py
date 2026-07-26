@@ -59,19 +59,38 @@ def run_market(df, th, gate, stop, ts, warm, slip):
     return items, pts
 
 
+def load_spreads() -> dict[str, float]:
+    """측정된 스프레드 중앙값을 모두 합친다(spreads.json + spreads_mid.json).
+
+    같은 종목이 양쪽에 있으면 **더 넓은 값**을 쓴다 — 스프레드는 시점에 따라 변하므로
+    보수적으로(비용을 크게) 잡는 쪽이 안전하다. 낮은 값을 고르면 유리한 시점만 골라
+    검증하는 셈이 된다.
+    """
+    med: dict[str, float] = {}
+    for name in ("spreads.json", "spreads_mid.json"):
+        p = DATA_DIR / name
+        if not p.exists():
+            continue
+        for m, v in json.loads(p.read_text()).items():
+            med[m] = max(med.get(m, 0.0), float(v))
+    return med
+
+
 def main() -> None:
-    path = DATA_DIR / "spreads_mid.json"
-    if not path.exists():
-        print("spreads_mid.json 없음 — `spread_check.py --sample mid` 먼저 실행")
+    med = load_spreads()
+    if not med:
+        print("스프레드 측정값 없음 — `spread_check.py --sample [mid]` 먼저 실행")
         return
-    med = {m: float(v) for m, v in json.loads(path.read_text()).items()}
     print("확대 유니버스 검증 · 라이브와 동일 파라미터(추가 튜닝 없음 = 전 구간 OOS)")
     print(f"비용 = 수수료 {C.FEE_ROUNDTRIP:.1%} + 종목별 실측 스프레드 · 다음봉 시가 진입\n")
     print(f"{'종목':8s} {'스프레드':>8s} {'봉':>4s} {'거래':>6s} {'승률':>6s} {'PF':>5s} "
           f"{'exp':>8s} {'t':>6s} {'계좌':>8s}  판정")
 
     verdict: dict[str, list] = {}
-    for m in data_cache.MARKETS_MID:
+    # 검증 대상: 측정된 스프레드가 상한 이내인 모든 종목(= 유니버스에 들 수 있는 종목)
+    targets = sorted(m for m, v in med.items() if v <= C.MAX_SPREAD_RATIO)
+    print(f"대상 {len(targets)}종목 (스프레드 중앙값 ≤{C.MAX_SPREAD_RATIO:.1%})\n")
+    for m in targets:
         df5 = data_cache.load(m, "minute5")
         if df5 is None or len(df5) < 20_000:
             print(f"{m.replace('KRW-',''):8s} 데이터 부족 — 건너뜀")

@@ -71,7 +71,7 @@ def bare_trader(strategies=("rsi2", "rsi2_15m")):
 
     class Scr:   # 진입 직전 스프레드 확인(v1.6) 통과 스텁
         spreads = {}
-        def tradable_now(self, market): return True, "스프레드 0.050%"
+        def tradable_now(self, market, cap=None): return True, "스프레드 0.050%"
     t.screener = Scr()
     return t
 

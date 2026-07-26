@@ -31,7 +31,11 @@ SPECS_LAB2 = [("minute5", 210_000)]     # ≈2년
 
 # 유니버스 확대 검증용 중형 종목 (스프레드 ≤0.1% 통과했으나 아직 검증 안 된 종목들)
 # 스프레드 중앙값 ≤0.1%를 통과한 종목만 (LPT 0.245%·AXS 0.153%·ICP 0.190%는 비용 초과로 제외)
-MARKETS_MID = ["KRW-SUI", "KRW-ATOM", "KRW-ENS", "KRW-GAS", "KRW-KAITO"]
+MARKETS_MID = ["KRW-SUI", "KRW-ATOM", "KRW-ENS", "KRW-GAS", "KRW-KAITO",
+               # v2.0 유니버스 확대로 편입 가능해진 미검증 종목
+               "KRW-NEAR", "KRW-TRUMP", "KRW-ORCA",
+               # v2.1 유니버스에 나타난 미검증 종목
+               "KRW-UNI", "KRW-AAVE", "KRW-PENDLE"]
 SPECS_MID = [("minute5", 210_000)]
 
 

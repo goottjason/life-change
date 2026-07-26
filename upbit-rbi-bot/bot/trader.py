@@ -233,6 +233,9 @@ class Trader:
                 continue
             if f"{name}:{market}" in self.positions:     # 같은 전략·같은 코인 중복 금지
                 continue
+            # 전략별 종목 제외 (§3.2-h, v2.1): 5분봉에서 음수로 확인된 종목은 5분봉 진입 금지
+            if market.split("-", 1)[-1] in C.STRATEGY_BLACKLIST.get(name, set()):
+                continue
             # always_active 전략은 레짐 필터를 통과시킨다 (§8, v1.3):
             # ADX 레짐 필터는 백테스트에서 기댓값 개선이 확인되지 않았고, rsi2 검증 시에도
             # 쓰지 않았으므로 적용하면 '검증되지 않은 다른 전략'이 된다.
@@ -264,7 +267,7 @@ class Trader:
         # 스크리닝 시점의 스프레드가 최신이 아니다. 넓어졌으면 진입하지 않는다
         # (거래당 기댓값이 0.26% 수준이라 스프레드 0.1%p 차이가 손익을 가른다).
         if C.VERIFY_SPREAD_ON_ENTRY:
-            ok, why = self.screener.tradable_now(market)
+            ok, why = self.screener.tradable_now(market, C.strategy_spread_cap(name))
             if not ok:
                 self.logger.log("entry_skip", strategy=name, market=market,
                                 reason=f"진입 취소: {why}")

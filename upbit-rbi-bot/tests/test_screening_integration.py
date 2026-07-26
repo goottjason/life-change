@@ -16,7 +16,7 @@ from indicators import ta
 class _PassScreener:
     """진입 직전 스프레드 확인(v1.6)을 통과시키는 스텁."""
     spreads = {}
-    def tradable_now(self, market): return True, "스프레드 0.050%"
+    def tradable_now(self, market, cap=None): return True, "스프레드 0.050%"
 
 
 class _Null:
