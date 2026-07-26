@@ -39,3 +39,15 @@ def test_stop_ratio_from_atr_fallback_when_atr_non_positive():
 
 def test_stop_ratio_from_atr_fallback_when_price_non_positive():
     assert C.stop_ratio_from_atr(1.5, 2.0, 0.0) == C.FALLBACK_STOP_RATIO
+
+
+def test_stop_ratio_floored_to_min_when_atr_tiny():
+    # 5분봉 저변동 BTC: k×ATR/price ≈ 0.00008 (수수료 0.1% 밑) → MIN_STOP_RATIO 로 바닥
+    tiny = C.stop_ratio_from_atr(1.5, 500.0, 94_000_000.0)
+    assert tiny == C.MIN_STOP_RATIO
+    assert C.MIN_STOP_RATIO > C.FEE_ROUNDTRIP   # 반드시 왕복 수수료보다 커야 함
+
+
+def test_stop_ratio_not_floored_when_atr_large_enough():
+    # k×ATR/price = 0.03 > MIN_STOP_RATIO → 그대로 유지(변동성 큰 코인은 ATR 존중)
+    assert C.stop_ratio_from_atr(1.5, 2.0, 100.0) == 0.03
