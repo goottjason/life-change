@@ -19,6 +19,7 @@ from config import charter as C
 from config.charter import STRATEGY_SPECS
 from config.timeutil import now_kst
 from data.upbit_client import UpbitClient
+from data.screener import Screener
 from bot.order_manager import OrderManager
 from bot.risk_manager import RiskManager
 from bot.position import Position, ExitReason
@@ -46,6 +47,7 @@ class Trader:
     def __init__(self):
         self.client = UpbitClient()
         self.orders = OrderManager(self.client)
+        self.screener = Screener()
         self.risk = RiskManager()
         self.strategies = build_strategies()
         self.notifier = TelegramNotifier()
@@ -80,10 +82,15 @@ class Trader:
                 entry_time = pd.Timestamp(o["entry_time"] + 9 * 3600, unit="s")  # epoch→KST naive
             else:
                 entry_time = pd.Timestamp(now_kst().replace(tzinfo=None))
+            try:
+                rec_df = self.client.get_candles(o["market"])
+                entry_atr = float(ta.atr(rec_df).iloc[-1]) if len(rec_df) >= 14 else 0.0
+            except Exception:
+                entry_atr = 0.0
             self.positions[slot] = Position(
                 strategy=slot, market=o["market"], entry_price=o["avg_price"],
                 size_krw=o["avg_price"] * o["volume"], volume=o["volume"],
-                entry_time=entry_time, entry_atr=0.0,
+                entry_time=entry_time, entry_atr=entry_atr,
             )
             self.risk.on_open()
             self.notifier.send(
@@ -109,7 +116,7 @@ class Trader:
         except Exception as e:
             self.failsafe.on_api_error(e)
 
-        for market in settings.universe:
+        for market in self.screener.eligible():
             try:
                 df = self.client.get_candles(market)
             except Exception as e:
@@ -160,6 +167,9 @@ class Trader:
     def _open(self, name: str, strat: BaseStrategy, market: str,
               price: float, df: pd.DataFrame) -> None:
         entry_atr = float(ta.atr(df).iloc[-1]) if len(df) >= 14 else 0.0
+        if entry_atr <= 0:
+            self.logger.log("entry_fail", strategy=name, market=market, reason="no atr")
+            return
         stop_ratio = C.stop_ratio_from_atr(strat.spec.atr_stop_mult, entry_atr, price)
         krw = self.risk.size_for(stop_ratio)                # §7.2 (ATR 정규화 v1.2)
         # 잔고 부족 등으로 주문금액이 최소주문금액 미만이면 조용히 스킵(로그 스팸 방지)
@@ -258,4 +268,5 @@ class Trader:
             "positions": positions,
             "regimes": dict(self.regimes),
             "prices": {m: round(p) for m, p in self.last_prices.items()},
+            "universe": self.screener.eligible(),
         }

@@ -61,7 +61,7 @@ class BotService:
             "last_tick_at": self.last_tick_at,
             "tick_count": self.tick_count,
             "last_error": self.last_error,
-            "universe": list(settings.universe),
+            "universe": self.trader.screener.eligible(),
             "interval_sec": settings.loop_interval_sec,
         }
         return snap
