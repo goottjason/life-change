@@ -135,3 +135,49 @@ def test_스크리너가_잔량부족_종목도_제외():
     picked = s.eligible()
     assert "KRW-THIN" not in picked
     assert "KRW-THIN" in s.rejected
+
+
+# ── v1.7: 스프레드 안정성 (순간 스냅샷으로는 판단 불가) ──────
+def test_스프레드_변동이_큰_종목은_제외():
+    """
+    실측: LPT 가 스냅샷 0.044% vs 8회 중앙값 0.245%. 진입 직전 확인은 진입 쪽만 보장하고
+    청산 시점 스프레드는 알 수 없으므로, 가끔만 좁아지는 종목은 유니버스에서 빼야 한다.
+    """
+    s = FakeScreener(TICKERS, BOOKS, top_n=3, min_turnover=0)
+    s._spread_hist["KRW-LPT"] = [0.0004, 0.0025, 0.0021, 0.0006]   # 중앙 0.0013 > 0.001
+    assert s._spread_stable("KRW-LPT") is False
+
+
+def test_꾸준히_좁은_종목은_통과():
+    s = FakeScreener(TICKERS, BOOKS, top_n=3, min_turnover=0)
+    s._spread_hist["KRW-BTC"] = [0.0003, 0.0004, 0.0003, 0.0005]
+    assert s._spread_stable("KRW-BTC") is True
+
+
+def test_최댓값이_상한의_2배_넘으면_제외():
+    """중앙값은 통과해도 한 번이라도 크게 벌어지면 청산 비용 위험이 있다."""
+    s = FakeScreener(TICKERS, BOOKS, top_n=3, min_turnover=0)
+    s._spread_hist["KRW-X"] = [0.0004, 0.0005, 0.0004, 0.0030]     # 최대 0.30% > 0.1%×2
+    assert s._spread_stable("KRW-X") is False
+
+
+def test_표본_부족하면_판정_보류():
+    """관측이 3개 미만이면 아직 판정하지 않는다(신규 편입 종목을 즉시 배제하지 않기 위해)."""
+    s = FakeScreener(TICKERS, BOOKS, top_n=3, min_turnover=0)
+    s._spread_hist["KRW-NEW"] = [0.0004, 0.0005]
+    assert s._spread_stable("KRW-NEW") is True
+
+
+def test_불안정_종목은_유니버스에서_빠진다():
+    s = FakeScreener(TICKERS, BOOKS, top_n=3, min_turnover=0, refresh_sec=0)
+    s.eligible()
+    # ETH 만 과거에 크게 벌어진 이력을 심는다
+    s._spread_hist["KRW-ETH"] = [0.0004, 0.0030, 0.0025, 0.0006]
+    picked = s.eligible()
+    assert "KRW-ETH" not in picked
+    assert "KRW-ETH" in s.rejected_unstable
+
+
+def test_안정성_기준값():
+    assert C.SPREAD_HISTORY_LEN == 6 and C.SPREAD_HISTORY_MIN_SAMPLES == 3
+    assert C.SPREAD_MAX_MULT == 2.0

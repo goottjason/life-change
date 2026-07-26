@@ -380,6 +380,9 @@ class Trader:
             "trend_up": dict(self.trend_up),        # 1시간봉 EMA200 위 여부 (진입 전제조건)
             "signals": {m: dict(v) for m, v in self.signal_view.items()},   # 진입 진단 (v1.5)
             "spread_rejected_new": list(getattr(self.screener, "rejected_new", [])),
+            "spread_unstable": list(getattr(self.screener, "rejected_unstable", [])),
+            "spread_stats": (self.screener.spread_stats()
+                             if hasattr(self.screener, "spread_stats") else {}),
             "spreads": {m: round(v * 100, 3) for m, v in
                         getattr(self.screener, "spreads", {}).items()},
             "spread_rejected": {m: round(v * 100, 3) for m, v in

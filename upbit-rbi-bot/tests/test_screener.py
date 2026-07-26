@@ -34,11 +34,19 @@ def test_eligible_falls_back_when_fetch_fails():
 
 
 def test_eligible_fetches_then_caches():
+    """
+    캐시 동작만 검증한다. 스프레드·잔량·상장일 필터(v1.3~v1.7)는 네트워크를 타므로
+    여기서는 모두 통과시켜 격리한다(각각 test_spread_filter/test_listing_filter 에서 검증).
+    """
     class S(Screener):
         calls = 0
         def _fetch_tickers(self):
             type(self).calls += 1
             return [_t("KRW-BTC", 100), _t("KRW-ETH", 50), _t("KRW-USDT", 999)]
+        def _apply_history_filter(self, markets):
+            return markets
+        def _apply_spread_filter(self, candidates):
+            return candidates
     s = S(top_n=2, min_turnover=0, refresh_sec=999, exclude={"USDT"})
     assert s.eligible() == ["KRW-BTC", "KRW-ETH"]
     s.eligible()

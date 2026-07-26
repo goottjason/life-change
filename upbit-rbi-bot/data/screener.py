@@ -16,6 +16,7 @@
 """
 from __future__ import annotations
 
+import statistics
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -119,6 +120,8 @@ class Screener:
         self._in_fallback = False
         self.spreads: dict[str, float] = {}      # 대시보드/로그용 최근 측정값
         self.rejected: dict[str, float] = {}     # 스프레드 초과로 탈락한 종목
+        self._spread_hist: dict[str, list[float]] = {}   # 종목별 스프레드 관측 이력 (v1.7)
+        self.rejected_unstable: list[str] = []   # 스프레드 변동이 큰 종목
 
     def _notify(self, msg):
         self.notifier.send(msg) if self.notifier else print(msg)
@@ -213,6 +216,20 @@ class Screener:
         passed, measured = filter_by_spread(books, self.max_spread, self.min_depth_krw)
         self.spreads = measured
         ok = set(passed)
+        # 스프레드 안정성 판정 (v1.7): 관측 이력을 쌓아 '가끔만 좁아지는 종목'을 걸러낸다.
+        for m, sp in measured.items():
+            hist = self._spread_hist.setdefault(m, [])
+            hist.append(sp)
+            del hist[:-C.SPREAD_HISTORY_LEN]
+        unstable = {m for m in list(ok) if not self._spread_stable(m)}
+        if unstable:
+            ok -= unstable
+            self.rejected_unstable = sorted(unstable)
+            print(f"[screener] 스프레드 불안정 제외: " + ", ".join(
+                f"{m.replace('KRW-','')} 중앙 {statistics.median(self._spread_hist[m]):.3%}"
+                f"/최대 {max(self._spread_hist[m]):.3%}" for m in self.rejected_unstable))
+        else:
+            self.rejected_unstable = []
         # 탈락 사유 구분: 스프레드 초과 vs 잔량 부족
         self.rejected = {m: s for m, s in measured.items()
                          if s > self.max_spread or m not in ok}
@@ -223,6 +240,25 @@ class Screener:
             print(f"[screener] 스프레드 초과 제외 {len(self.rejected)}종목 (상한 "
                   f"{self.max_spread:.2%}): {detail}")
         return ordered
+
+    def _spread_stable(self, market: str) -> bool:
+        """
+        최근 관측 이력으로 '스프레드가 꾸준히 좁은가'를 본다 (v1.7).
+        표본이 SPREAD_HISTORY_MIN_SAMPLES 미만이면 판정하지 않는다(관측을 더 모은다).
+        기준: 중앙값 ≤ 상한 AND 최댓값 ≤ 상한 × SPREAD_MAX_MULT.
+        이유: 진입 직전 확인은 진입 쪽만 보장하고, 청산 시점 스프레드는 진입할 때 알 수 없다.
+        """
+        hist = self._spread_hist.get(market, [])
+        if len(hist) < C.SPREAD_HISTORY_MIN_SAMPLES:
+            return True
+        return (statistics.median(hist) <= self.max_spread
+                and max(hist) <= self.max_spread * C.SPREAD_MAX_MULT)
+
+    def spread_stats(self) -> dict[str, dict]:
+        """대시보드용: 종목별 스프레드 중앙값·최댓값·관측수."""
+        return {m: {"median": round(statistics.median(h) * 100, 3),
+                    "max": round(max(h) * 100, 3), "n": len(h)}
+                for m, h in self._spread_hist.items() if h}
 
     # ── 진입 직전 스프레드 재확인 (§6, v1.6) ─────────────────
     def spread_now(self, market: str) -> float | None:

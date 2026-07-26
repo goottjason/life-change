@@ -113,7 +113,7 @@
   <div class="card" style="margin-top:16px">
     <h2>유니버스 / 호가 스프레드 <span class="chip">스프레드 ≤0.10% · 상장 1년+ 만 거래</span></h2>
     <div class="scroll"><table id="unitbl">
-      <thead><tr><th>마켓</th><th>현재가</th><th>스프레드</th><th>왕복비용(수수료+스프레드)</th><th>상태</th></tr></thead>
+      <thead><tr><th>마켓</th><th>현재가</th><th>스프레드(현재)</th><th>중앙 / 최대(최근 1시간)</th><th>왕복비용</th><th>상태</th></tr></thead>
       <tbody></tbody>
     </table></div>
     <div class="empty" id="uniempty">—</div>
@@ -263,13 +263,15 @@ function renderSignals(s){
 function renderUniverse(s){
   const uni = new Set(s.universe||[]);
   const spreads = s.spreads||{}, rejected = s.spread_rejected||{}, newly = new Set(s.spread_rejected_new||[]);
+  const unstable = new Set(s.spread_unstable||[]), stats = s.spread_stats||{};
   const all = new Set([...Object.keys(spreads), ...Object.keys(rejected), ...uni, ...newly]);
   const rows=[...all].map(m=>{
     const sp = spreads[m] ?? rejected[m];
     const cost = sp!=null ? (0.1 + sp) : null;
     let state, klass="";
     if(uni.has(m)){ state="🟢 거래 대상"; klass="pos"; }
-    else if(newly.has(m)){ state="신규 상장/히스토리 부족 제외"; }
+    else if(newly.has(m)){ state="신규 상장(1년 미만) 제외"; }
+    else if(unstable.has(m)){ state="스프레드 변동 커서 제외"; klass="neg"; }
     else if(sp!=null && sp>0.1){ state="스프레드 초과 제외"; klass="neg"; }
     else { state="후보(미선정)"; }
     return {m, sp, cost, state, klass, on:uni.has(m)};
@@ -278,6 +280,7 @@ function renderUniverse(s){
     <td>${r.m.replace("KRW-","")}</td>
     <td>${(s.prices||{})[r.m]!=null?Math.round(s.prices[r.m]).toLocaleString()+"원":"—"}</td>
     <td class="${r.klass}">${r.sp!=null?r.sp.toFixed(3)+"%":"—"}</td>
+    <td style="color:var(--muted)">${stats[r.m]?`${stats[r.m].median}% / ${stats[r.m].max}% (${stats[r.m].n}회)`:"—"}</td>
     <td>${r.cost!=null?r.cost.toFixed(3)+"%":"—"}</td>
     <td>${r.state}</td></tr>`).join("");
   const has=rows.length;

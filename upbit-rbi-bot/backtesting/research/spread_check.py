@@ -72,13 +72,13 @@ def sample(markets: list[str], n: int = 8, interval: float = 15.0) -> dict[str, 
 
 
 def main() -> None:
-    markets = data_cache.MARKETS_LAB
+    markets = data_cache.MARKETS_MID if "mid" in sys.argv else data_cache.MARKETS_LAB
     if "--sample" in sys.argv:
         import json
         n = 8
         print(f"스프레드 {n}회 샘플링 중(약 {n * 15 // 60}분)…")
         med = sample(markets, n=n)
-        out = data_cache.DATA_DIR / "spreads.json"
+        out = data_cache.DATA_DIR / ("spreads_mid.json" if "mid" in sys.argv else "spreads.json")
         out.write_text(json.dumps(med, indent=2))
         print(f"\n{'종목':7s} {'중앙 스프레드':>12s} {'왕복비용(수수료+스프레드)':>24s} {'거래가능':>8s}")
         for m, s in sorted(med.items(), key=lambda kv: kv[1]):
