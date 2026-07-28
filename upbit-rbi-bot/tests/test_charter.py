@@ -63,7 +63,7 @@ def test_rsi2_스펙_검증값():
     v2.3에서 15분봉만 진입선/게이트를 바꿨다 — 5분봉은 검증값 그대로여야 한다.
     """
     spec = C.STRATEGY_SPECS["rsi2"]
-    assert (spec.stop_pct, spec.rr, spec.min_atr_ratio) == (0.025, 1.0, 0.006)
+    assert (spec.stop_pct, spec.rr, spec.min_atr_ratio) == (0.025, 1.0, 0.003)  # 게이트는 v2.6 테스트값
     assert spec.entry_level == 3.0                # 진입선 RSI(2) ≤ 3 (v1.3 검증값)
     assert C.time_stop_bars_for(spec) == 96
     assert spec.timeframe == "minute5"
@@ -77,7 +77,7 @@ def test_rsi2_15m_스펙_검증값():
     통계적 입증은 아니다(walk-forward t=+1.08) — 측정된 최선값이다.
     """
     spec = C.STRATEGY_SPECS["rsi2_15m"]
-    assert (spec.stop_pct, spec.rr, spec.min_atr_ratio) == (0.030, 1.0, 0.0083)
+    assert (spec.stop_pct, spec.rr, spec.min_atr_ratio) == (0.030, 1.0, 0.004)  # 게이트는 v2.6 테스트값
     assert spec.entry_level == 7.0                # 진입선 RSI(2) ≤ 7 (v2.3)
     assert C.time_stop_bars_for(spec) == 32       # 8시간 = 15분 × 32봉
     assert spec.timeframe == "minute15"

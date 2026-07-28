@@ -254,8 +254,10 @@ STRATEGY_SPECS: dict[str, StrategySpec] = {
     #            계좌 +32.7% MDD 5.9% (backtesting/research/README.md)
     # 손절/익절은 ATR이 아니라 고정 2.5%다(검증된 값). 레짐 필터는 적용하지 않는다
     # (ADX 필터는 개선 근거가 확인되지 않았고, 검증 시에도 쓰지 않았다).
+    # ⚠ v2.6(테스트) — 변동성 게이트 0.6% → 0.3%. 실매매 매수-매도 왕복을 실제로 관측하려고
+    #   거래를 일부러 늘린 값이다. 백테스트로 검증한 값이 아니다. 테스트가 끝나면 0.006 으로 되돌린다.
     "rsi2": StrategySpec("rsi2", atr_stop_mult=0.0, rr=1.0, regime=Regime.RANGE,
-                         stop_pct=0.025, min_atr_ratio=0.006, time_stop_bars=96,
+                         stop_pct=0.025, min_atr_ratio=0.003, time_stop_bars=96,
                          use_dead_extras=False, always_active=True,
                          timeframe="minute5"),
     # rsi2_15m (v1.4) — 같은 신호를 15분봉에 적용. 15분봉은 '한 봉 평균 움직임 0.323% vs
@@ -270,8 +272,11 @@ STRATEGY_SPECS: dict[str, StrategySpec] = {
     #   walk-forward 8폴드 중 6폴드가 독립적으로 gate 0.0083 을 선택.
     # ⚠ 통계적으로 입증된 값은 아니다 — walk-forward t=+1.08(입증에는 표본 약 8.5배 필요)이고
     #   양의 결과가 특정 한 폴드에 상당히 의존한다. '측정된 최선'일 뿐이다(헌장 §2 개정 주석).
+    #
+    # ⚠ v2.6(테스트) — 게이트 0.83% → 0.4%. 위와 같은 이유(왕복 체결 관측)로 낮춘 값이며
+    #   검증되지 않았다. walk-forward가 고른 값은 0.0083 이다 — 테스트 후 되돌린다.
     "rsi2_15m": StrategySpec("rsi2_15m", atr_stop_mult=0.0, rr=1.0, regime=Regime.RANGE,
-                             stop_pct=0.030, min_atr_ratio=0.0083, time_stop_bars=32,
+                             stop_pct=0.030, min_atr_ratio=0.004, time_stop_bars=32,
                              use_dead_extras=False, always_active=True,
                              timeframe="minute15", entry_level=7.0),
 }

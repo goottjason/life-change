@@ -159,7 +159,7 @@ def test_진입선을_meta로_노출한다():
     df = dumping_df()
     assert Rsi2PullbackStrategy(SPEC).signal(df, {"trend_up": True}).meta["entry"] == 3.0
     m15 = Rsi2PullbackStrategy(SPEC_15M).signal(df, {"trend_up": True}).meta
-    assert m15["entry"] == 7.0 and m15["gate"] == 0.0083
+    assert m15["entry"] == 7.0 and m15["gate"] == 0.004   # 게이트는 v2.6 테스트값
 
 
 def test_15분봉_진입선_초과는_보류():
@@ -170,8 +170,8 @@ def test_15분봉_진입선_초과는_보류():
     assert "진입선 7" in sig.reason
 
 
-def test_15분봉_변동성_게이트는_0_83퍼센트():
-    """게이트 사이에 있는 변동성(0.83%~1.0%)에서 15분봉은 진입, 5분봉 게이트는 무관."""
+def test_15분봉_변동성_게이트_위에서는_진입():
+    """게이트(v2.6 테스트값 0.4%) 위 변동성(0.83%~1.0%)에서 15분봉은 진입한다."""
     strat = Rsi2PullbackStrategy(SPEC_15M)
     sig = strat.signal(dumping_df(drop_per_bar=0.004, band=0.009), {"trend_up": True})
     assert sig.meta["atr_pct"] is not None
@@ -183,7 +183,7 @@ def test_15분봉_변동성_게이트는_0_83퍼센트():
 def test_스펙이_검증된_값과_일치():
     assert SPEC.stop_pct == 0.025           # 손절/익절 2.5% 고정
     assert SPEC.rr == 1.0
-    assert SPEC.min_atr_ratio == 0.006      # 변동성 게이트 0.6% (5분봉은 v2.3에서도 불변)
+    assert SPEC.min_atr_ratio == 0.003      # 변동성 게이트 0.3% (v2.6 테스트값, 검증값은 0.006)
     assert SPEC.entry_level == 3.0           # 진입선 RSI(2) ≤ 3
     assert time_stop_bars_for(SPEC) == 96   # 8시간
     assert SPEC.use_dead_extras is False    # 부가 청산 규칙 미사용(백테스트 재현성)
