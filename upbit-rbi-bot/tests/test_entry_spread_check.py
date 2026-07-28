@@ -104,11 +104,53 @@ def test_tradable_now_판정():
     assert not ok and "상한" in why
 
 
+# 실측(2026-07-26~28): 스프레드 상한 0.1%를 통과하는 KRW 종목 수. 유니버스를 실제로
+# 제한하는 것은 이 수치이지 UNIVERSE_TOP_N 이 아니어야 한다.
+OBSERVED_SPREAD_PASSING_MARKETS = 20
+
+
+def test_유니버스_상한은_스프레드필터보다_느슨해야_한다():
+    """§3 — 유니버스를 정하는 것은 '칸 수'가 아니라 **스프레드 필터**여야 한다 (v2.5).
+
+    UNIVERSE_TOP_N 은 v2.4까지 15였는데 이는 근거 없이 잡은 값이었고, 스프레드를 통과하는
+    종목(실측 18~20개)보다 작아 **상한이 먼저 걸리는** 상태였다. 즉 비용 기준으로 거래 가능한
+    종목을 칸이 모자라서 떨어뜨리고 있었다.
+
+    이 테스트는 특정 숫자(60)가 아니라 **그 관계**를 고정한다 — 값을 튜닝해도 상한이 다시
+    제약이 되는 순간에만 실패한다.
+    """
+    assert C.UNIVERSE_TOP_N > OBSERVED_SPREAD_PASSING_MARKETS, (
+        f"UNIVERSE_TOP_N={C.UNIVERSE_TOP_N} 이 스프레드 통과 종목수"
+        f"({OBSERVED_SPREAD_PASSING_MARKETS})보다 작거나 같다 → 비용상 거래 가능한 종목을"
+        " 칸 부족으로 버리게 된다. 상한이 아니라 스프레드가 유니버스를 정해야 한다(§3)."
+    )
+
+
+def test_유니버스_상한_확대가_주기·레이트리밋을_깨지_않는다():
+    """v2.5 — 상한을 올려도 되는 근거(실측 캔들 왕복 0.215초)를 산술로 고정한다.
+
+    호출은 직렬이므로 N 을 키워도 **처리율이 아니라 소요시간**만 늘어난다. tick 루프는
+    `tick(); sleep(interval)`(deploy/run_bot.py) 이라 긴 tick 은 겹치지 않고 주기만 늘린다.
+    """
+    quote_rtt_sec = 0.215          # 실측 중앙값 (n=6, 최대 0.234)
+    calls_per_market = 2           # minute5 + minute15
+    trend_rtt_sec = 0.215          # 1시간봉 — TREND_REFRESH_SEC 캐시 갱신 tick 에만
+
+    # 최악(추세 갱신이 겹친 tick)의 주기가 5분봉 한 봉의 절반을 넘지 않아야 한다.
+    worst_cycle = C.UNIVERSE_TOP_N * (calls_per_market * quote_rtt_sec + trend_rtt_sec) + 10
+    assert worst_cycle < 300 / 2, f"최악 주기 {worst_cycle:.0f}초가 5분봉(300초) 대비 과도"
+
+    # 처리율은 N 과 무관하게 일정하다 — 업비트 시세 한도 10 req/s 안에 있어야 한다.
+    assert 1 / quote_rtt_sec < 10
+
+    # 후보 스캔은 이미 전 종목으로 포화돼 있어 N 을 키워도 오더북 호출이 늘지 않는다.
+    assert C.UNIVERSE_TOP_N * C.SPREAD_CANDIDATE_MULT >= 270
+
+
 def test_헌장_풀_확대값():
-    assert C.UNIVERSE_TOP_N == 15                     # 6 → 15 (v1.6)
     assert C.MIN_TURNOVER_24H_KRW == 100_000_000      # 100억 → 30억 → 1억 (v2.0)
-    # 후보 스캔: 하한을 넘는 전 종목 확인 (15×20=300 ≥ KRW 270) — v2.0
+    # 후보 스캔: 하한을 넘는 전 종목 확인 (top_n×20 ≥ KRW 270) — v2.0
     assert C.UNIVERSE_TOP_N * C.SPREAD_CANDIDATE_MULT >= 270
     assert C.VERIFY_SPREAD_ON_ENTRY is True
-    # 동시 보유 한도는 그대로 — 풀이 커져도 리스크 노출은 자본이 제한한다
+    # 동시 보유 한도는 그대로 — 풀이 커져도 리스크 노출은 자본이 제한한다 (v2.5에서 특히 중요)
     assert C.MAX_CONCURRENT_POSITIONS == 3
