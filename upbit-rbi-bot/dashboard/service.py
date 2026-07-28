@@ -146,14 +146,21 @@ class BotService:
         """
         백테스트 기대치 — 실전 성과를 여기에 대조해 괴리를 본다 (§10.4).
         수치 출처: backtesting/research/README.md (2년·홀드아웃 17개월·실측 스프레드 반영).
+
+        ⚠ v2.3에서 15분봉의 진입선(3→7)과 게이트(1.0%→0.83%)를 바꿨다. 아래 15분봉·병행 수치는
+        **개정 전 파라미터**의 홀드아웃 측정치다 — 개정 근거는 선택구간(209일·보수적 스프레드)에서
+        59거래 승률 81.4% 거래당 +0.2585% 이지만, 구간과 비용 가정이 달라 이 표에 섞어 넣으면
+        대조 기준이 무의미해진다. 홀드아웃 재측정 전까지는 '옛 파라미터 기준'임을 표시만 한다.
         """
         return {
             "rsi2": {"win_rate": 69.1, "profit_factor": 1.49, "exp_pct": 0.180,
                      "trades_per_day": 0.78},
             "rsi2_15m": {"win_rate": 73.9, "profit_factor": 1.96, "exp_pct": 0.489,
-                         "trades_per_day": 0.26},
+                         "trades_per_day": 0.26,
+                         "note": "v2.3 개정 전(진입선 3·게이트 1.0%) 기준 — 재측정 전"},
             "combined": {"win_rate": 70.3, "profit_factor": 1.64, "exp_pct": 0.259,
-                         "trades_per_day": 1.21, "account_2y_pct": 51.4, "mdd_pct": 6.2},
+                         "trades_per_day": 1.21, "account_2y_pct": 51.4, "mdd_pct": 6.2,
+                         "note": "15분봉이 v2.3 개정 전 기준이라 병행 합계도 재측정 전"},
         }
 
     def round_trips(self, limit: int = 50, scope: str = "current") -> list[dict]:

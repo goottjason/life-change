@@ -1,7 +1,8 @@
 """
 rsi2 전략(헌장 v1.3) 단위 테스트 — 백테스트로 검증된 규칙이 코드에 그대로 들어갔는지 확인.
 
-검증 규칙: RSI(2)≤3 AND 1시간봉 EMA200 위 AND ATR/가격≥0.6% → 진입 / RSI(2)≥70 → 청산
+검증 규칙(5분봉): RSI(2)≤3 AND 1시간봉 EMA200 위 AND ATR/가격≥0.6% → 진입 / RSI(2)≥70 → 청산
+v2.3: 진입선과 변동성 게이트는 **전략 스펙**에서 읽는다 — 15분봉은 RSI(2)≤7 · ATR≥0.83%.
 """
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ from strategies.base import Action
 from strategies.rsi2_pullback import Rsi2PullbackStrategy, trend_up_from_hourly
 
 SPEC = STRATEGY_SPECS["rsi2"]
+SPEC_15M = STRATEGY_SPECS["rsi2_15m"]
 
 
 def make_df(closes, high_mult=1.0, low_mult=1.0) -> pd.DataFrame:
@@ -32,6 +34,18 @@ def make_df(closes, high_mult=1.0, low_mult=1.0) -> pd.DataFrame:
 def dumping_df(bars: int = 60, drop_per_bar: float = 0.004, band: float = 0.02):
     """계속 하락하는 캔들 → RSI(2)는 0에 가까워지고, band로 ATR 크기를 조절한다."""
     closes = [10_000 * (1 - drop_per_bar) ** i for i in range(bars)]
+    return make_df(closes, high_mult=1 + band / 2, low_mult=1 - band / 2)
+
+
+def mild_dip_df(bars: int = 60, drop_per_bar: float = 0.004, band: float = 0.02,
+                bounce: float = 0.00025):
+    """RSI(2)가 3과 7 **사이**(≈5.8)에 놓이는 얕은 눌림 — 진입선 차이를 가르는 캔들.
+
+    마지막 봉만 아주 조금 반등시키면 RSI(2)가 0에서 5~6대로 올라온다.
+    5분봉(진입선 3)은 보류하고 15분봉(진입선 7)만 진입해야 한다.
+    """
+    closes = [10_000 * (1 - drop_per_bar) ** i for i in range(bars)]
+    closes[-1] = closes[-2] * (1 + bounce)
     return make_df(closes, high_mult=1 + band / 2, low_mult=1 - band / 2)
 
 
@@ -120,11 +134,57 @@ def test_ctx_없어도_장기캔들이면_자체계산(strat):
     assert sig.action == Action.ENTER_LONG      # 상승 추세 + 과매도 + 변동성 충분
 
 
+# ── v2.3: 진입선을 스펙에서 읽는다 (5분봉 3 / 15분봉 7) ──────
+def test_진입선은_스펙에서_읽는다():
+    """
+    같은 캔들(RSI2≈5.8)에서 5분봉은 보류하고 15분봉은 진입해야 한다.
+
+    모듈 상수(ENTRY_LEVEL)를 쓰면 두 전략이 같은 판정을 내므로 이 테스트가 깨진다 —
+    즉 이 테스트가 '진입선이 스펙에서 온다'는 사실을 지킨다.
+    """
+    df = mild_dip_df()
+    rsi2 = Rsi2PullbackStrategy(SPEC).signal(df, {"trend_up": True}).meta["rsi2"]
+    assert 3.0 < rsi2 < 7.0, f"테스트 캔들의 RSI2({rsi2})가 두 진입선 사이가 아니다"
+
+    five = Rsi2PullbackStrategy(SPEC).signal(df, {"trend_up": True})
+    assert five.action == Action.HOLD
+    assert "진입선 3" in five.reason
+
+    fifteen = Rsi2PullbackStrategy(SPEC_15M).signal(df, {"trend_up": True})
+    assert fifteen.action == Action.ENTER_LONG
+
+
+def test_진입선을_meta로_노출한다():
+    """대시보드 진입 진단이 전략별 진입선을 표시하려면 meta에 있어야 한다 (v2.3)."""
+    df = dumping_df()
+    assert Rsi2PullbackStrategy(SPEC).signal(df, {"trend_up": True}).meta["entry"] == 3.0
+    m15 = Rsi2PullbackStrategy(SPEC_15M).signal(df, {"trend_up": True}).meta
+    assert m15["entry"] == 7.0 and m15["gate"] == 0.0083
+
+
+def test_15분봉_진입선_초과는_보류():
+    """15분봉도 진입선(7)을 넘으면 보류한다 — 게이트만 느슨해진 게 아님을 확인."""
+    df = mild_dip_df(bounce=0.001)          # RSI2 ≈ 19.9
+    sig = Rsi2PullbackStrategy(SPEC_15M).signal(df, {"trend_up": True})
+    assert sig.action == Action.HOLD
+    assert "진입선 7" in sig.reason
+
+
+def test_15분봉_변동성_게이트는_0_83퍼센트():
+    """게이트 사이에 있는 변동성(0.83%~1.0%)에서 15분봉은 진입, 5분봉 게이트는 무관."""
+    strat = Rsi2PullbackStrategy(SPEC_15M)
+    sig = strat.signal(dumping_df(drop_per_bar=0.004, band=0.009), {"trend_up": True})
+    assert sig.meta["atr_pct"] is not None
+    assert 0.83 <= sig.meta["atr_pct"] < 1.0, sig.meta["atr_pct"]
+    assert sig.action == Action.ENTER_LONG      # 옛 게이트(1.0%)라면 막혔을 구간
+
+
 # ── 스펙(헌장 값)이 검증된 설정과 일치하는지 ─────────────────
 def test_스펙이_검증된_값과_일치():
     assert SPEC.stop_pct == 0.025           # 손절/익절 2.5% 고정
     assert SPEC.rr == 1.0
-    assert SPEC.min_atr_ratio == 0.006      # 변동성 게이트 0.6%
+    assert SPEC.min_atr_ratio == 0.006      # 변동성 게이트 0.6% (5분봉은 v2.3에서도 불변)
+    assert SPEC.entry_level == 3.0           # 진입선 RSI(2) ≤ 3
     assert time_stop_bars_for(SPEC) == 96   # 8시간
     assert SPEC.use_dead_extras is False    # 부가 청산 규칙 미사용(백테스트 재현성)
     assert SPEC.always_active is True       # 레짐 필터 미적용

@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
-CHARTER_VERSION = "v2.2"
+CHARTER_VERSION = "v2.3"
 
 # ── 자본·수수료 (헌장 §1, §13) ────────────────────────────────
 # 자본은 더 이상 고정값이 아니라 '실계좌 잔고(총 자산)'를 런타임에 읽어서 쓴다 (헌장 v1.1 §7.1).
@@ -184,6 +184,11 @@ class StrategySpec:
     # ── v1.3 추가: 백테스트로 검증된 설정을 라이브에 그대로 재현하기 위한 필드 ──
     stop_pct: float | None = None   # 고정 손절거리비율. 지정하면 ATR 대신 이 값을 쓴다
     min_atr_ratio: float = 0.0      # 진입 변동성 게이트: ATR/가격이 이 값 미만이면 진입 금지
+    # ── v2.3 추가: RSI(2) 진입 임계값을 전략별로 둔다 ──
+    # v2.2까지는 strategies/rsi2_pullback.ENTRY_LEVEL(=3.0) 모듈 상수를 두 전략이 공유했다.
+    # 15분봉은 봉 길이에 맞춰 진입선을 재측정(7.0)했으므로 스펙에서 분리해야 한다.
+    # 기본값 3.0 = 기존 상수와 동일 → 지정하지 않은 전략의 동작은 바뀌지 않는다.
+    entry_level: float = 3.0        # RSI(2)가 이 값 이하일 때만 진입 (청산선 70.0은 공용)
     time_stop_bars: int | None = None   # 전략별 시간손절(봉). None이면 전역 TIME_STOP_BARS
     use_dead_extras: bool = True    # §4-A의 부가 규칙(횡보·신호중립·ATR축소) 사용 여부
     always_active: bool = False     # True면 레짐 필터(§8)를 통과시킨다
@@ -212,10 +217,18 @@ STRATEGY_SPECS: dict[str, StrategySpec] = {
     # 왕복비용 0.15%'로 5분봉(0.196% vs 0.15%)보다 비용 부담이 절반이라 거래당 엣지가 크다.
     # 검증(홀드아웃 17개월): 188거래 승률 73.9% PF 1.96 거래당 +0.489% t+3.75
     # 5분봉과 병행 시(동시 3포지션·동일코인 중복 금지): 741신호 PF 1.64 t+5.06 계좌 +51.4% MDD 6.2%
+    #
+    # v2.3 — 진입선 3→7, 게이트 1.0%→0.83%. 근거(선택구간 209일·보수적 스프레드):
+    #   기존 th=3/gate 1.00%  →  7거래 승률 42.9% 보수적 기댓값 **−0.3378%**
+    #   신규 th=7/gate 0.83%  → 59거래 승률 81.4% 보수적 기댓값 **+0.2585%**
+    #                           (왕복 0.25% 스트레스에서도 +0.2649%, 하루 0.28회)
+    #   walk-forward 8폴드 중 6폴드가 독립적으로 gate 0.0083 을 선택.
+    # ⚠ 통계적으로 입증된 값은 아니다 — walk-forward t=+1.08(입증에는 표본 약 8.5배 필요)이고
+    #   양의 결과가 특정 한 폴드에 상당히 의존한다. '측정된 최선'일 뿐이다(헌장 §2 개정 주석).
     "rsi2_15m": StrategySpec("rsi2_15m", atr_stop_mult=0.0, rr=1.0, regime=Regime.RANGE,
-                             stop_pct=0.030, min_atr_ratio=0.010, time_stop_bars=32,
+                             stop_pct=0.030, min_atr_ratio=0.0083, time_stop_bars=32,
                              use_dead_extras=False, always_active=True,
-                             timeframe="minute15"),
+                             timeframe="minute15", entry_level=7.0),
 }
 
 # 가동 전략 (v1.4) — macd/rsi/cvd 는 장기·walk-forward·국면분해에서 모두 음의 기댓값으로

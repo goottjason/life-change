@@ -242,12 +242,14 @@ function renderSignals(s){
       const trend = d.trend_up===true?'<span class="chip trend">상승 ✅</span>'
                   : d.trend_up===false?'<span class="chip range">하락 ❌</span>'
                   : '<span class="chip">확인불가</span>';
-      const rsiOk = (d.rsi2!=null && d.rsi2<=3);
+      // 진입선은 전략별로 다르다 (5분봉 3 / 15분봉 7 — 헌장 v2.3). meta.entry 를 그대로 쓴다.
+      const entry = (d.entry!=null ? d.entry : 3);
+      const rsiOk = (d.rsi2!=null && d.rsi2<=entry);
       const enter = d.action==="enter_long";
       rows.push(`<tr>
         <td>${m.replace("KRW-","")}</td>
         <td>${name} <span class="chip">${(window.__tfName||(x=>x))(d.timeframe||"")}</span></td>
-        <td class="${rsiOk?'pos':''}">${d.rsi2!=null?d.rsi2.toFixed(1):"—"} ${rsiOk?"✅":""}</td>
+        <td class="${rsiOk?'pos':''}">${d.rsi2!=null?d.rsi2.toFixed(1):"—"} <span style="color:var(--muted)">/ ≤${entry}</span> ${rsiOk?"✅":""}</td>
         <td class="${atrOk?'pos':(atrOk===false?'neg':'')}">${atr} <span style="color:var(--muted)">/ ${gate}</span> ${atrOk?"✅":(atrOk===false?"❌":"")}</td>
         <td>${trend}</td>
         <td style="color:${enter?'var(--pos)':'var(--muted)'}">${enter?"🟢 진입 신호":d.reason||""}</td>
@@ -308,9 +310,9 @@ function renderGuide(s){
   종목을 걸러냅니다. 현재 통과 종목은 위 <b>유니버스</b> 표에 있습니다.<br><br>
 
   <b>2. 언제 사나요? — 세 조건이 동시에 맞을 때만</b><br>
-  ① <b>RSI(2) ≤ 3</b> : 최근 10분이 거의 전부 하락한 극단적 과매도 상태<br>
+  ① <b>RSI(2) ≤ 3</b>(5분봉) / <b>≤ 7</b>(15분봉) : 직전 몇 봉이 거의 전부 하락한 과매도 상태<br>
   ② <b>1시간봉이 EMA200 위</b> : 큰 흐름은 상승 (하락 추세의 급락은 사지 않습니다)<br>
-  ③ <b>변동성(ATR) ≥ 0.6%</b>(5분봉) / <b>≥ 1.0%</b>(15분봉) : 움직임이 수수료보다 충분히 클 때만<br>
+  ③ <b>변동성(ATR) ≥ 0.6%</b>(5분봉) / <b>≥ 0.83%</b>(15분봉) : 움직임이 수수료보다 충분히 클 때만<br>
   → 한마디로 <b>"오르는 중인 코인이 잠깐 급하게 밀렸을 때 산다"</b> 입니다.
   세 조건이 모두 맞는 순간은 드물기 때문에 <b>하루 1회 정도</b>, 조용한 장에서는 <b>며칠간 0회</b>도 정상입니다.
   지금 무엇에 막혀 있는지는 위 <b>진입 진단</b> 표에서 볼 수 있습니다.<br><br>
@@ -349,9 +351,11 @@ function renderExpect(ex){
   const rows=[["rsi2","5분봉"],["rsi2_15m","15분봉"],["combined","병행 합계"]];
   document.getElementById("expect").innerHTML = rows.map(([k,label])=>{
     const e=ex[k]||{};
+    // note: 파라미터가 개정돼 이 수치가 현재 설정과 다를 때의 경고 (헌장 v2.3)
+    const note = e.note? `<br><span style="color:var(--muted)">⚠ ${e.note}</span>`:"";
     return `<div class="strat"><div class="n">${label}</div>
       <div class="m">승률 ${e.win_rate}% · PF ${e.profit_factor}<br>
-      거래당 +${e.exp_pct}% · 하루 ${e.trades_per_day}회</div></div>`;
+      거래당 +${e.exp_pct}% · 하루 ${e.trades_per_day}회${note}</div></div>`;
   }).join("");
 }
 

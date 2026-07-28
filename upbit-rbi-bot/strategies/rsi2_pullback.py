@@ -6,13 +6,14 @@ RSI(2) 눌림목 되돌림 전략 (헌장 §2, v1.3) — 백테스트로 검증�
 "오르는 중인 종목의 일시적 급락은 대체로 되돌아온다"는 성질을 이용한다.
 
 ## 세 가지 조건이 동시에 맞아야만 진입한다 (하나라도 어긋나면 안 산다)
-1. **RSI(2) ≤ 3** — 2봉 기준 RSI가 3 이하. 0~100 척도에서 극단적 과매도로,
-   최근 10분이 거의 전부 하락이었다는 뜻이다. 흔하지 않다(하루 1회 미만).
+1. **RSI(2) ≤ 진입선** — 2봉 기준 RSI. 0~100 척도에서 극단적 과매도로,
+   직전 몇 봉이 거의 전부 하락이었다는 뜻이다. 진입선은 타임프레임별로 다르다
+   (5분봉 3 / 15분봉 7 — v2.3, `StrategySpec.entry_level`).
 2. **1시간봉 EMA200 위** — 큰 흐름이 상승일 때만. 하락 추세의 급락을 사면
    그냥 계속 떨어진다(백테스트에서 하락장 진입은 −0.25%/거래).
-3. **ATR(14)/가격 ≥ 0.6%** — 변동성 게이트. 지금 이 코인이 하루에도 별로 안 움직이면
-   되돌림 폭이 수수료(왕복 0.1%)+스프레드보다 작아서 이겨도 남는 게 없다.
-   **이 조건이 없으면 전략 전체가 음의 기댓값이 된다**(연구 결과).
+3. **ATR(14)/가격 ≥ 게이트** — 변동성 게이트(5분봉 0.6% / 15분봉 0.83% — v2.3).
+   지금 이 코인이 별로 안 움직이면 되돌림 폭이 수수료(왕복 0.1%)+스프레드보다 작아서
+   이겨도 남는 게 없다. **이 조건이 없으면 전략 전체가 음의 기댓값이 된다**(연구 결과).
 
 ## 청산
 - **RSI(2) ≥ 70** — 되돌림 완료. 주 청산 경로다(백테스트에서 대부분).
@@ -32,8 +33,11 @@ from indicators import ta
 from strategies.base import BaseStrategy, Signal, Action
 
 RSI_PERIOD = 2
-ENTRY_LEVEL = 3.0        # RSI(2) 이 값 이하에서 진입 (검증값)
-EXIT_LEVEL = 70.0        # RSI(2) 이 값 이상에서 청산 (검증값)
+# 진입선은 v2.3부터 **전략 스펙**(StrategySpec.entry_level)에서 읽는다 — 5분봉 3.0 / 15분봉 7.0.
+# 아래 상수는 참고용 기록일 뿐이다(스펙 기본값과 동일). 판단에는 절대 쓰지 않는다 —
+# 다시 여기서 읽으면 두 전략이 진입선을 공유해 15분봉이 7 → 3 으로 조용히 되돌아간다.
+ENTRY_LEVEL = 3.0        # (참고) 5분봉 검증값 = StrategySpec.entry_level 기본값
+EXIT_LEVEL = 70.0        # RSI(2) 이 값 이상에서 청산 (검증값, 두 타임프레임 공용)
 TREND_EMA_BARS = 2400    # ctx 없이 기준봉으로 추세를 볼 때 필요한 봉 수 (5분×2400 = 200시간)
 
 
@@ -56,7 +60,9 @@ class Rsi2PullbackStrategy(BaseStrategy):
         trend_up = self._trend_up(df, ctx)
         atr_ratio = self._atr_ratio(df)
         gate = self.spec.min_atr_ratio
+        entry = self.spec.entry_level    # 전략별 진입선 (v2.3) — 게이트와 같이 스펙에서만 읽는다
         meta = {"rsi2": round(float(rsi2), 1), "trend_up": trend_up, "gate": gate,
+                "entry": entry,
                 "atr_pct": None if atr_ratio is None else round(atr_ratio * 100, 3),
                 "timeframe": self.spec.timeframe}
 
@@ -65,9 +71,9 @@ class Rsi2PullbackStrategy(BaseStrategy):
             return Signal(Action.EXIT, self.name,
                           f"되돌림 완료 (RSI2 {rsi2:.1f} ≥ {EXIT_LEVEL:.0f})", meta)
 
-        if rsi2 > ENTRY_LEVEL:
+        if rsi2 > entry:
             return Signal(Action.HOLD, self.name,
-                          f"과매도 대기 (RSI2 {rsi2:.1f}, 진입선 {ENTRY_LEVEL:.0f} 이하)", meta)
+                          f"과매도 대기 (RSI2 {rsi2:.1f}, 진입선 {entry:.0f} 이하)", meta)
 
         if trend_up is None:
             return Signal(Action.HOLD, self.name, "추세 판정 불가(1시간봉 미확보) — 진입 보류", meta)
