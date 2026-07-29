@@ -225,3 +225,21 @@ def test_진행중인_1시간봉은_판정에서_제외():
     normal = trend_up_from_hourly(make_hourly(closes))
     spiked = trend_up_from_hourly(make_hourly(closes + [0.01]))   # 진행봉 폭락
     assert normal is True and spiked is True
+
+
+def test_rsi_ok는_반올림_전_값으로_판정한다():
+    """
+    대시보드 모순 방지 — RSI2 7.032 는 표시값이 7.0 이라 화면에서 다시 비교하면 '≤7 ✅'가
+    되지만 봇은 진입하지 않는다. 실제로 그 행이 'RSI2 7.0 / ≤7 ✅ + 과매도 대기'로 관측됐다.
+    판정 결과 자체를 meta로 내려보내 화면이 다시 계산하지 않게 한다.
+    """
+    sig = Rsi2PullbackStrategy(SPEC_15M).signal(mild_dip_df(bounce=0.000305),
+                                                {"trend_up": True})
+    assert sig.meta["rsi2"] == 7.0            # 표시값은 진입선과 같아 보이고
+    assert sig.action == Action.HOLD          # 봇은 진입하지 않는다 (실제 7.032)
+    assert sig.meta["rsi_ok"] is False        # 화면도 ✅ 를 켜면 안 된다
+
+
+def test_rsi_ok는_진입할_때_참이다():
+    sig = Rsi2PullbackStrategy(SPEC_15M).signal(dumping_df(), {"trend_up": True})
+    assert sig.action == Action.ENTER_LONG and sig.meta["rsi_ok"] is True

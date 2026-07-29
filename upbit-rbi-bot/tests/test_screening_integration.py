@@ -91,6 +91,7 @@ def test_tick_scans_screener_markets():
     t.positions = {}
     t.last_prices = {}
     t.regimes = {}
+    t.signal_view = {}                            # tick 끝에서 낡은 진단을 정리한다
     t.notifier = _Null()
     t.strategies = build_strategies(("macd",))    # v1.4: 타임프레임 수집에 필요
     scanned = []

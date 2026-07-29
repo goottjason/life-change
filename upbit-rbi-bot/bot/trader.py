@@ -150,6 +150,7 @@ class Trader:
 
         # 가동 전략이 쓰는 타임프레임을 모아 종목별로 한 번씩 조회한다 (v1.4: 5분+15분 병행)
         timeframes = sorted({s.spec.timeframe for s in self.strategies.values()})
+        seen: set[str] = set()
         for market in self.screener.eligible():
             frames: dict[str, pd.DataFrame] = {}
             for tf in timeframes:
@@ -160,6 +161,11 @@ class Trader:
             if not frames:
                 continue
             self._process_market(market, frames)
+            seen.add(market)
+        # 이번 tick 에 판정하지 않은 종목의 진단은 버린다. 남겨두면 유니버스에서 빠진 종목이
+        # 대시보드에 '갱신되지 않는 행'으로 계속 떠서, 운영자가 낡은 RSI2·ATR%를 현재값으로 읽는다.
+        for stale in [m for m in self.signal_view if m not in seen]:
+            del self.signal_view[stale]
 
     # ── 상위 타임프레임 추세 (rsi2 §2, v1.3) ────────────────
     def _trend_ctx(self, market: str) -> dict:
@@ -227,29 +233,42 @@ class Trader:
                             note=why if reason == ExitReason.DEAD_POSITION else "")
 
         # 2~3. 진입: 레짐 활성 전략만 (§8) + 리스크 통과(§5) + 사이징(§7)
+        # 진단(signal_view)은 매 tick 새로 만든다 — 건너뛴 전략이 직전 tick 의 숫자를 계속
+        # 보여주면 운영자가 '지금 왜 안 사는가'를 낡은 값으로 판단하게 된다.
+        view: dict[str, dict] = {}
+        self.signal_view[market] = view
+
+        def blocked(strategy: str, why: str) -> None:
+            """판정까지 가지 못하고 막힌 전략도 이유는 남긴다(행이 통째로 사라지지 않게)."""
+            view[strategy] = {"action": Action.HOLD.value, "reason": why}
+
         for name, strat in self.strategies.items():
             df = frames.get(strat.spec.timeframe)
             if df is None:
+                blocked(name, f"{strat.spec.timeframe} 봉 조회 실패 — 판정 보류")
                 continue
             if f"{name}:{market}" in self.positions:     # 같은 전략·같은 코인 중복 금지
+                blocked(name, "보유 중 — 진입 판정 생략")
                 continue
             # 전략별 종목 제외 (§3.2-h, v2.1): 5분봉에서 음수로 확인된 종목은 5분봉 진입 금지
             if market.split("-", 1)[-1] in C.STRATEGY_BLACKLIST.get(name, set()):
+                blocked(name, "이 타임프레임 진입 금지 종목 (§3.2-h)")
                 continue
             # always_active 전략은 레짐 필터를 통과시킨다 (§8, v1.3):
             # ADX 레짐 필터는 백테스트에서 기댓값 개선이 확인되지 않았고, rsi2 검증 시에도
             # 쓰지 않았으므로 적용하면 '검증되지 않은 다른 전략'이 된다.
             if not strat.spec.always_active and not is_strategy_active(strat.regime, regime):
+                blocked(name, f"레짐 불일치 (현재 {regime.value})")
                 continue
             # 동시 포지션 한도(§5.5, 3개)는 risk.can_enter() 가 본다. 전략당 1포지션 제약은
             # v1.4에서 제거 — 백테스트 포트폴리오가 동시 3포지션을 가정했으므로 맞춘다.
-            ok, _ = self.risk.can_enter()
+            ok, why = self.risk.can_enter()
             if not ok:
+                blocked(name, f"리스크 한도 — {why}")
                 continue
             sig = strat.signal(df, ctx)
             # 관찰용: 왜 진입하지 않았는지 대시보드에 노출 (§10, v1.5)
-            self.signal_view.setdefault(market, {})[name] = {
-                "action": sig.action.value, "reason": sig.reason, **sig.meta}
+            view[name] = {"action": sig.action.value, "reason": sig.reason, **sig.meta}
             if sig.action != Action.ENTER_LONG:
                 continue
             if self._is_duplicate(market):         # 동일코인 중복 금지 (§3.3)

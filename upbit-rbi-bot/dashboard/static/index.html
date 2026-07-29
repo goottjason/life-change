@@ -244,7 +244,9 @@ function renderSignals(s){
                   : '<span class="chip">확인불가</span>';
       // 진입선은 전략별로 다르다 (5분봉 3 / 15분봉 7 — 헌장 v2.3). meta.entry 를 그대로 쓴다.
       const entry = (d.entry!=null ? d.entry : 3);
-      const rsiOk = (d.rsi2!=null && d.rsi2<=entry);
+      // 봇이 반올림 전 값으로 내린 판정(rsi_ok)을 그대로 쓴다. 표시값(7.0)으로 다시 비교하면
+      // 실제 7.04 인 경우 '✅ 인데 사유는 과매도 대기'인 모순된 행이 된다.
+      const rsiOk = (d.rsi_ok!=null ? d.rsi_ok : (d.rsi2!=null && d.rsi2<=entry));
       const enter = d.action==="enter_long";
       rows.push(`<tr>
         <td>${m.replace("KRW-","")}</td>

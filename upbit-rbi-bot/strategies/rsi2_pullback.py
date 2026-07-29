@@ -61,8 +61,10 @@ class Rsi2PullbackStrategy(BaseStrategy):
         atr_ratio = self._atr_ratio(df)
         gate = self.spec.min_atr_ratio
         entry = self.spec.entry_level    # 전략별 진입선 (v2.3) — 게이트와 같이 스펙에서만 읽는다
+        # rsi_ok 는 반올림 전 값으로 판정한 결과다. 대시보드가 표시용 반올림값(7.04→7.0)으로
+        # 다시 비교하면 '7.0 ≤ 7 ✅' 인데 사유는 '과매도 대기'인 모순된 행이 나온다.
         meta = {"rsi2": round(float(rsi2), 1), "trend_up": trend_up, "gate": gate,
-                "entry": entry,
+                "entry": entry, "rsi_ok": bool(rsi2 <= entry),
                 "atr_pct": None if atr_ratio is None else round(atr_ratio * 100, 3),
                 "timeframe": self.spec.timeframe}
 
