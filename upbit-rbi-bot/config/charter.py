@@ -279,11 +279,13 @@ STRATEGY_SPECS: dict[str, StrategySpec] = {
                              stop_pct=0.030, min_atr_ratio=0.004, time_stop_bars=32,
                              use_dead_extras=False, always_active=True,
                              timeframe="minute15", entry_level=7.0),
+    "easy_teaching": StrategySpec("easy_teaching", atr_stop_mult=1.5, rr=1.5, regime=Regime.RANGE,
+                                  timeframe="minute15", always_active=True)
 }
 
 # 가동 전략 (v1.4) — macd/rsi/cvd 는 장기·walk-forward·국면분해에서 모두 음의 기댓값으로
 # 확인되어 비활성화한다(backtesting/research/README.md). 되살리려면 §11 기준을 먼저 통과해야 한다.
-ACTIVE_STRATEGIES: tuple[str, ...] = ("rsi2", "rsi2_15m")
+ACTIVE_STRATEGIES: tuple[str, ...] = ("rsi2", "rsi2_15m", "easy_teaching")
 
 # ── 파생 계산 헬퍼 (모두 '현재 자본(capital)'을 인자로 받는다) ──────────────
 # capital = 실계좌 총 자산(원화 + 보유코인 평가액). 입금하면 자동으로 커지고,

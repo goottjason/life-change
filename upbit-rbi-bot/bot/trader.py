@@ -29,6 +29,7 @@ from strategies.macd import MacdStrategy
 from strategies.rsi_mean_reversion import RsiMeanReversionStrategy
 from strategies.cvd import CvdStrategy
 from strategies.rsi2_pullback import Rsi2PullbackStrategy, trend_up_from_hourly
+from strategies.easy_teaching import EasyTeachingStrategy
 from strategies.regime import detect_regime, is_strategy_active
 from indicators import ta
 from safety.failsafe import Failsafe
@@ -42,6 +43,7 @@ ALL_STRATEGIES = {
     "cvd": CvdStrategy,
     "rsi2": Rsi2PullbackStrategy,
     "rsi2_15m": Rsi2PullbackStrategy,      # 같은 신호, 15분봉 (스펙의 timeframe 으로 구분)
+    "easy_teaching": EasyTeachingStrategy,
 }
 
 
@@ -73,6 +75,16 @@ class Trader:
         self._trend_at: dict[str, float] = {}      # 종목별 추세 갱신 시각(monotonic)
         # {코인: {전략: {action, reason, rsi2, atr_pct, trend_up, gate}}} — 진입 진단 (v1.5)
         self.signal_view: dict[str, dict] = {}
+
+    def toggle_strategy(self, name: str, enable: bool) -> bool:
+        """런타임 전략 온오프 (대시보드 지원). 반환값은 변경 후 상태."""
+        if name not in ALL_STRATEGIES:
+            return False
+        if enable and name not in self.strategies:
+            self.strategies[name] = ALL_STRATEGIES[name](STRATEGY_SPECS[name])
+        elif not enable and name in self.strategies:
+            del self.strategies[name]
+        return name in self.strategies
 
     # ── 부팅 (§9.3 상태 복구) ────────────────────────────────
     def boot(self) -> None:
