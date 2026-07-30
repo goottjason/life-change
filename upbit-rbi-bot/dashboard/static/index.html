@@ -236,10 +236,14 @@ function renderSignals(s){
   const sig = s.signals || {};
   for(const [m, byStrat] of Object.entries(sig)){
     for(const [name, d] of Object.entries(byStrat)){
+      // 이번 tick 에 조건을 판정하지 않은 행(보유 중·리스크 한도·봉 조회 실패)은 세 조건 칸을
+      // 비운다. '확인불가'로 두면 1시간봉을 못 받은 진짜 판정 불가와 구별되지 않는다.
+      const judged = d.rsi2!=null;
       const gate = (d.gate!=null? (d.gate*100).toFixed(1)+"%" : "—");
       const atr  = (d.atr_pct!=null? d.atr_pct.toFixed(3)+"%" : "—");
       const atrOk = (d.atr_pct!=null && d.gate!=null) ? (d.atr_pct >= d.gate*100) : null;
-      const trend = d.trend_up===true?'<span class="chip trend">상승 ✅</span>'
+      const trend = !judged?'<span class="chip">—</span>'
+                  : d.trend_up===true?'<span class="chip trend">상승 ✅</span>'
                   : d.trend_up===false?'<span class="chip range">하락 ❌</span>'
                   : '<span class="chip">확인불가</span>';
       // 진입선은 전략별로 다르다 (5분봉 3 / 15분봉 7 — 헌장 v2.3). meta.entry 를 그대로 쓴다.
@@ -251,8 +255,8 @@ function renderSignals(s){
       rows.push(`<tr>
         <td>${m.replace("KRW-","")}</td>
         <td>${name} <span class="chip">${(window.__tfName||(x=>x))(d.timeframe||"")}</span></td>
-        <td class="${rsiOk?'pos':''}">${d.rsi2!=null?d.rsi2.toFixed(1):"—"} <span style="color:var(--muted)">/ ≤${entry}</span> ${rsiOk?"✅":""}</td>
-        <td class="${atrOk?'pos':(atrOk===false?'neg':'')}">${atr} <span style="color:var(--muted)">/ ${gate}</span> ${atrOk?"✅":(atrOk===false?"❌":"")}</td>
+        <td class="${rsiOk?'pos':''}">${judged?`${d.rsi2.toFixed(1)} <span style="color:var(--muted)">/ ≤${entry}</span> ${rsiOk?"✅":""}`:"—"}</td>
+        <td class="${atrOk?'pos':(atrOk===false?'neg':'')}">${judged?`${atr} <span style="color:var(--muted)">/ ${gate}</span> ${atrOk?"✅":(atrOk===false?"❌":"")}`:"—"}</td>
         <td>${trend}</td>
         <td style="color:${enter?'var(--pos)':'var(--muted)'}">${enter?"🟢 진입 신호":d.reason||""}</td>
       </tr>`);

@@ -63,6 +63,15 @@ class FakeScreener(Screener):
     def _fetch_tickers(self):
         return self._tickers
 
+    def _flagged(self):
+        """유의종목 필터는 여기서 검증 대상이 아니다 — 비운다.
+
+        비우지 않으면 실서버 유의종목 API를 타서 테스트가 시장 상황에 따라 깨진다.
+        (2026-07-30 실제로 깨졌다: DOGE 가 DEPOSIT_AMOUNT_SOARING 으로 지정되어
+         스프레드 필터 앞단에서 걸러지자 '스프레드로 탈락' 기대가 어긋났다.)
+        """
+        return set()
+
     def _validated_only(self, candidates):
         return candidates
 

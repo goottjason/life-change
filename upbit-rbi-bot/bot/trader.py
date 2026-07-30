@@ -250,9 +250,10 @@ class Trader:
             if f"{name}:{market}" in self.positions:     # 같은 전략·같은 코인 중복 금지
                 blocked(name, "보유 중 — 진입 판정 생략")
                 continue
-            # 전략별 종목 제외 (§3.2-h, v2.1): 5분봉에서 음수로 확인된 종목은 5분봉 진입 금지
+            # 전략별 종목 제외 (§3.2-h, v2.1): 5분봉에서 음수로 확인된 종목은 5분봉 진입 금지.
+            # 진단 행을 만들지 않는다 — tick 마다 바뀌는 상태가 아니라 고정 설정이므로,
+            # '지금 왜 안 사는가' 표에 매 tick 올리면 영구 잡음 행이 된다(유니버스 표가 담당).
             if market.split("-", 1)[-1] in C.STRATEGY_BLACKLIST.get(name, set()):
-                blocked(name, "이 타임프레임 진입 금지 종목 (§3.2-h)")
                 continue
             # always_active 전략은 레짐 필터를 통과시킨다 (§8, v1.3):
             # ADX 레짐 필터는 백테스트에서 기댓값 개선이 확인되지 않았고, rsi2 검증 시에도

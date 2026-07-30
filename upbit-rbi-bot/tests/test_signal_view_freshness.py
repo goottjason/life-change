@@ -87,3 +87,27 @@ def test_판정한_전략은_숫자가_매_tick_갱신된다():
     t._process_market("KRW-XRP", FRAMES)
     row = t.signal_view["KRW-XRP"]["rsi2_15m"]
     assert row["atr_pct"] is not None and row["rsi2"] is not None
+
+
+def test_영구제외_종목은_행을_만들지_않는다():
+    """
+    §3.2-h 블랙리스트(AVAX 5분봉 금지)는 tick 마다 바뀌는 상태가 아니라 고정 설정이다.
+    '지금 왜 안 사는가' 표에 매 tick 띄우면 영구 잡음 행이 되고, 판정한 값이 없어서
+    추세 칸이 '확인불가'로 보인다 — 1시간봉 조회 실패(진짜 판정 불가)와 구별되지 않는다.
+    """
+    t = trader()
+    t._process_market("KRW-AVAX", FRAMES)
+    assert "rsi2" not in t.signal_view["KRW-AVAX"], "영구 제외 조합이 진단표에 올라왔다"
+    assert "rsi2_15m" in t.signal_view["KRW-AVAX"]
+
+
+def test_판정한_행은_추세를_반드시_담는다():
+    """
+    화면의 추세 칸은 trend_up 이 없으면 '확인불가'로 표시된다. 판정한 행에 이 키가
+    빠지면 시장 추세를 못 읽은 것처럼 보이므로, 판정 행에는 항상 들어 있어야 한다.
+    """
+    t = trader()
+    t._process_market("KRW-XRP", FRAMES)
+    for name, row in t.signal_view["KRW-XRP"].items():
+        if "rsi2" in row:                      # 판정까지 간 행
+            assert "trend_up" in row, name
