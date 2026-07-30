@@ -80,6 +80,13 @@
 
   <div class="halt-banner" id="halt"></div>
 
+  <div class="card" style="margin-bottom:16px">
+    <h2>전략 선택 (Strategy Selector) <span class="chip">실시간 ON/OFF</span></h2>
+    <div class="row-strats" id="strategySelector" style="padding:12px 16px">
+      <span class="empty">로딩 중...</span>
+    </div>
+  </div>
+
   <div class="kpis" id="kpis"></div>
 
   <div class="grid two">
@@ -102,9 +109,9 @@
   </div>
 
   <div class="card" style="margin-top:16px">
-    <h2>진입 진단 — 지금 왜 사지 않는가 <span class="chip">조건 3개 모두 충족 시에만 매수</span></h2>
+    <h2>진입 진단 — 지금 왜 사지 않는가 <span class="chip">조건 충족 시에만 매수</span></h2>
     <div class="scroll"><table id="sigtbl">
-      <thead><tr><th>마켓</th><th>전략(봉)</th><th>RSI(2)</th><th>변동성 ATR%</th><th>1시간 추세</th><th>상태</th></tr></thead>
+      <thead><tr><th>마켓</th><th>전략(봉)</th><th>지표 1</th><th>지표 2</th><th>지표 3</th><th>상태</th></tr></thead>
       <tbody></tbody>
     </table></div>
     <div class="empty" id="sigempty">신호 진단 대기 중 (첫 tick 이후 표시)</div>
@@ -228,36 +235,101 @@ function renderStatus(s){
     h.textContent="🧪 모의 모드로 강제됨 — "+s.forced_paper+" (주문 미전송)";
   }
   window.__tfName = tfName;
+  
+  // 전략 선택기 렌더링
+  renderStrategySelector(bot.active_strategies || []);
 }
 
-// 진입 진단: 조건 3개 중 무엇에 막혔는지 보여준다
+const ALL_STRATS = ["rsi2", "rsi2_15m", "easy_teaching"];
+function renderStrategySelector(active){
+  const el = document.getElementById("strategySelector");
+  if(!el) return;
+  el.innerHTML = ALL_STRATS.map(strat => {
+    const isOn = active.includes(strat);
+    const color = isOn ? "var(--accent)" : "var(--muted)";
+    const bdColor = isOn ? "var(--accent)" : "var(--line)";
+    const fw = isOn ? "bold" : "normal";
+    const icon = isOn ? "🟢" : "⚪";
+    return `<button class="theme-btn" style="margin-right:8px; border-color:${bdColor}; color:${color}; font-weight:${fw};"
+      onclick="toggleStrategy('${strat}', ${!isOn})">${icon} ${strat}</button>`;
+  }).join("");
+}
+
+async function toggleStrategy(name, enable){
+  const action = enable ? "켜시" : "끄시";
+  if(!confirm(`전략 '${name}' 을(를) ${action}겠습니까?`)) return;
+  try{
+    let token = localStorage.getItem("lc_token");
+    if(!token) {
+      token = prompt("DASHBOARD_TOKEN 입력 (없으면 빈칸):");
+      if(token) localStorage.setItem("lc_token", token);
+    }
+    const r = await fetch(BASE+"/api/strategy/toggle", {
+      method:"POST",
+      headers:{"Content-Type":"application/json", "x-token":token||""},
+      body: JSON.stringify({name, enable})
+    });
+    if(!r.ok){
+      alert("변경 실패: "+(await r.text()));
+      localStorage.removeItem("lc_token");
+      return;
+    }
+    refresh();
+  }catch(e){
+    alert("오류: "+e);
+  }
+}
+
+// 진입 진단: 조건 중 무엇에 막혔는지 보여준다
 function renderSignals(s){
   const rows=[];
   const sig = s.signals || {};
   for(const [m, byStrat] of Object.entries(sig)){
     for(const [name, d] of Object.entries(byStrat)){
-      // 이번 tick 에 조건을 판정하지 않은 행(보유 중·리스크 한도·봉 조회 실패)은 세 조건 칸을
-      // 비운다. '확인불가'로 두면 1시간봉을 못 받은 진짜 판정 불가와 구별되지 않는다.
-      const judged = d.rsi2!=null;
-      const gate = (d.gate!=null? (d.gate*100).toFixed(1)+"%" : "—");
-      const atr  = (d.atr_pct!=null? d.atr_pct.toFixed(3)+"%" : "—");
-      const atrOk = (d.atr_pct!=null && d.gate!=null) ? (d.atr_pct >= d.gate*100) : null;
-      const trend = !judged?'<span class="chip">—</span>'
-                  : d.trend_up===true?'<span class="chip trend">상승 ✅</span>'
-                  : d.trend_up===false?'<span class="chip range">하락 ❌</span>'
-                  : '<span class="chip">확인불가</span>';
-      // 진입선은 전략별로 다르다 (5분봉 3 / 15분봉 7 — 헌장 v2.3). meta.entry 를 그대로 쓴다.
-      const entry = (d.entry!=null ? d.entry : 3);
-      // 봇이 반올림 전 값으로 내린 판정(rsi_ok)을 그대로 쓴다. 표시값(7.0)으로 다시 비교하면
-      // 실제 7.04 인 경우 '✅ 인데 사유는 과매도 대기'인 모순된 행이 된다.
-      const rsiOk = (d.rsi_ok!=null ? d.rsi_ok : (d.rsi2!=null && d.rsi2<=entry));
       const enter = d.action==="enter_long";
+      
+      let col1 = "—", col2 = "—", col3 = "—";
+      let c1cls = "", c2cls = "", c3cls = "";
+      
+      if(name === "easy_teaching") {
+        const obOk = d.ob === true;
+        const fvgOk = d.fvg === true;
+        col1 = d.ob_range && d.ob_range !== "-" ? `OB ${d.ob_range} ${obOk?"✅":""}` : "—";
+        c1cls = obOk ? "pos" : "";
+        
+        col2 = d.fvg_range && d.fvg_range !== "-" ? `FVG ${d.fvg_range} ${fvgOk?"✅":""}` : "—";
+        c2cls = fvgOk ? "pos" : "";
+        
+        col3 = `Confluence: ${d.confluence || 0}`;
+        c3cls = (d.confluence >= 2) ? "pos" : "";
+      } else {
+        // 기존 RSI2 전략
+        const judged = d.rsi2!=null;
+        const gate = (d.gate!=null? (d.gate*100).toFixed(1)+"%" : "—");
+        const atr  = (d.atr_pct!=null? d.atr_pct.toFixed(3)+"%" : "—");
+        const atrOk = (d.atr_pct!=null && d.gate!=null) ? (d.atr_pct >= d.gate*100) : null;
+        
+        const entry = (d.entry!=null ? d.entry : 3);
+        const rsiOk = (d.rsi_ok!=null ? d.rsi_ok : (d.rsi2!=null && d.rsi2<=entry));
+        
+        col1 = judged?`${d.rsi2.toFixed(1)} <span style="color:var(--muted)">/ ≤${entry}</span> ${rsiOk?"✅":""}`:"—";
+        c1cls = rsiOk ? "pos" : "";
+        
+        col2 = judged?`${atr} <span style="color:var(--muted)">/ ${gate}</span> ${atrOk?"✅":(atrOk===false?"❌":"")}`:"—";
+        c2cls = atrOk ? 'pos' : (atrOk===false?'neg':'');
+        
+        col3 = !judged?'<span class="chip">—</span>'
+             : d.trend_up===true?'<span class="chip trend">상승 ✅</span>'
+             : d.trend_up===false?'<span class="chip range">하락 ❌</span>'
+             : '<span class="chip">확인불가</span>';
+      }
+
       rows.push(`<tr>
         <td>${m.replace("KRW-","")}</td>
         <td>${name} <span class="chip">${(window.__tfName||(x=>x))(d.timeframe||"")}</span></td>
-        <td class="${rsiOk?'pos':''}">${judged?`${d.rsi2.toFixed(1)} <span style="color:var(--muted)">/ ≤${entry}</span> ${rsiOk?"✅":""}`:"—"}</td>
-        <td class="${atrOk?'pos':(atrOk===false?'neg':'')}">${judged?`${atr} <span style="color:var(--muted)">/ ${gate}</span> ${atrOk?"✅":(atrOk===false?"❌":"")}`:"—"}</td>
-        <td>${trend}</td>
+        <td class="${c1cls}">${col1}</td>
+        <td class="${c2cls}">${col2}</td>
+        <td class="${c3cls}">${col3}</td>
         <td style="color:${enter?'var(--pos)':'var(--muted)'}">${enter?"🟢 진입 신호":d.reason||""}</td>
       </tr>`);
     }
@@ -266,6 +338,7 @@ function renderSignals(s){
   document.getElementById("sigempty").style.display = rows.length?"none":"block";
   document.querySelector("#sigtbl").style.display = rows.length?"table":"none";
 }
+
 
 // 유니버스: 스프레드 통과/제외를 한눈에
 function renderUniverse(s){

@@ -60,7 +60,7 @@ class BotService:
             "dry_run": settings.dry_run,
             "mode": "DRY_RUN(모의)" if settings.dry_run else "LIVE(실전)",
             "charter_version": C.CHARTER_VERSION,
-            "active_strategies": list(C.ACTIVE_STRATEGIES),
+            "active_strategies": list(self.trader.strategies.keys()),
             "started_at": self.started_at,
             "last_tick_at": self.last_tick_at,
             "tick_count": self.tick_count,
@@ -70,15 +70,21 @@ class BotService:
         }
         return snap
 
+    def toggle_strategy(self, name: str, enable: bool) -> dict:
+        """대시보드 런타임 토글"""
+        self.trader.toggle_strategy(name, enable)
+        return {"status": "ok", "active_strategies": list(self.trader.strategies.keys())}
+
     # ── 전략 세대 분리 (v1.5) ────────────────────────────────
     # 헌장 v1.3에서 전략을 macd/rsi/cvd → rsi2 계열로 **완전히 교체**했다. 과거 전략의 거래
     # 기록을 현재 성과와 섞으면 승률·손익이 무의미해지므로, 기본 조회는 **현재 가동 전략만**
     # 본다. 과거 기록은 지우지 않고 scope="all" 로 볼 수 있게 남긴다(§10.5 기록 보존).
-    @staticmethod
-    def _scope_clause(scope: str) -> tuple[str, tuple]:
+    def _scope_clause(self, scope: str) -> tuple[str, tuple]:
         if scope == "all":
             return "", ()
-        names = tuple(C.ACTIVE_STRATEGIES)
+        names = tuple(self.trader.strategies.keys())
+        if not names:
+            return " AND 1=0", ()
         holders = ",".join("?" * len(names))
         return f" AND strategy IN ({holders})", names
 

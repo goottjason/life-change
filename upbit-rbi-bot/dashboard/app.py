@@ -15,8 +15,13 @@ from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse, PlainTextResponse
+from pydantic import BaseModel
 
 from dashboard.service import BotService
+
+class ToggleRequest(BaseModel):
+    name: str
+    enable: bool
 
 PREFIX = "/life-change"
 STATIC = Path(__file__).parent / "static"
@@ -74,3 +79,9 @@ def api_kill(x_token: str = Header(default="")) -> dict:
     if not DASHBOARD_TOKEN or x_token != DASHBOARD_TOKEN:
         raise HTTPException(status_code=403, detail="invalid token")
     return service.kill()
+
+@app.post(PREFIX + "/api/strategy/toggle")
+def api_toggle_strategy(req: ToggleRequest, x_token: str = Header(default="")) -> dict:
+    if not DASHBOARD_TOKEN or x_token != DASHBOARD_TOKEN:
+        raise HTTPException(status_code=403, detail="invalid token")
+    return service.toggle_strategy(req.name, req.enable)
