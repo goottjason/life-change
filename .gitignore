@@ -19,3 +19,4 @@ upbit-rbi-bot/logs/
 
 # 백테스트 캔들 캐시(대용량, 재수집 가능)
 upbit-rbi-bot/backtesting/research/data/
+.venv_yt/
