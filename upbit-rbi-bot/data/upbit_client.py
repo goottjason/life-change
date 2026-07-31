@@ -75,7 +75,9 @@ class UpbitClient:
         if settings.dry_run:
             return OrderResult(ok=True, order_id="DRY", filled_volume=volume, avg_price=price)
         try:
-            resp = self._upbit.buy_limit_order(market, price, volume)
+            safe_price = pyupbit.get_tick_size(price)
+            safe_vol = f"{volume:.8f}"
+            resp = self._upbit.buy_limit_order(market, safe_price, safe_vol)
         except Exception as e:
             return OrderResult(ok=False, error=f"buy_limit exception: {e}")
         return self._parse(resp)
@@ -84,7 +86,9 @@ class UpbitClient:
         if settings.dry_run:
             return OrderResult(ok=True, order_id="DRY", filled_volume=volume, avg_price=price)
         try:
-            resp = self._upbit.sell_limit_order(market, price, volume)
+            safe_price = pyupbit.get_tick_size(price)
+            safe_vol = f"{volume:.8f}"
+            resp = self._upbit.sell_limit_order(market, safe_price, safe_vol)
         except Exception as e:
             return OrderResult(ok=False, error=f"sell_limit exception: {e}")
         return self._parse(resp)
@@ -95,7 +99,8 @@ class UpbitClient:
             price = self.get_price(market)
             return OrderResult(ok=True, order_id="DRY", filled_volume=volume, avg_price=price)
         try:
-            resp = self._upbit.sell_market_order(market, volume)
+            safe_vol = f"{volume:.8f}"
+            resp = self._upbit.sell_market_order(market, safe_vol)
         except Exception as e:
             return OrderResult(ok=False, error=f"sell_market exception: {e}")
         return self._parse(resp)
