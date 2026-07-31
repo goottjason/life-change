@@ -3,6 +3,7 @@ import pandas as pd
 
 from strategies.base import BaseStrategy, Action, Signal
 from config.charter import StrategySpec
+from indicators import ta
 
 class EasyTeachingStrategy(BaseStrategy):
     """
@@ -14,6 +15,8 @@ class EasyTeachingStrategy(BaseStrategy):
     def __init__(self, spec: StrategySpec):
         super().__init__(spec)
         self.lookback = 50  # 과거 50봉 이내의 OB/FVG 탐색
+        self.mitigated_ob_idx = None
+        self.mitigated_fvg_idx = None
 
     def signal(self, df: pd.DataFrame, ctx: dict | None = None) -> Signal:
         if len(df) < self.lookback:
@@ -30,6 +33,11 @@ class EasyTeachingStrategy(BaseStrategy):
         # 가장 최근에 발생한 OB 탐색 (현재 봉 제외)
         # engulfing_bull 이 True인 인덱스 찾기
         recent_ob_idx = engulfing_bull.iloc[-self.lookback:-1].where(lambda x: x).last_valid_index()
+        
+        # 이미 사용된(mitigated) OB라면 무시
+        if recent_ob_idx == self.mitigated_ob_idx:
+            recent_ob_idx = None
+            
         active_ob = None
         if recent_ob_idx is not None:
             # 음봉이었던 이전 캔들의 몸통이 OB 구간
@@ -43,12 +51,23 @@ class EasyTeachingStrategy(BaseStrategy):
         # n-2 고가 < n 저가
         gap_up = df['high'].shift(2) < df['low']
         recent_fvg_idx = gap_up.iloc[-self.lookback:-1].where(lambda x: x).last_valid_index()
+        
+        # 이미 사용된(mitigated) FVG라면 무시
+        if recent_fvg_idx == self.mitigated_fvg_idx:
+            recent_fvg_idx = None
+
         active_fvg = None
         if recent_fvg_idx is not None:
             fvg_top = df.loc[recent_fvg_idx, 'low']
             prev2_idx = df.index.get_loc(recent_fvg_idx) - 2
             fvg_bottom = df.iloc[prev2_idx]['high']
-            active_fvg = (fvg_bottom, fvg_top)
+            
+            # FVG 크기 필터링 (너무 작은 갭은 무시)
+            atr = float(ta.atr(df).iloc[-1]) if len(df) >= 14 else 0.0
+            if (fvg_top - fvg_bottom) >= atr * 0.2:
+                active_fvg = (fvg_bottom, fvg_top)
+            else:
+                recent_fvg_idx = None
 
         curr_close = df['close'].iloc[-1]
         curr_low = df['low'].iloc[-1]
@@ -80,6 +99,8 @@ class EasyTeachingStrategy(BaseStrategy):
 
         # OB와 FVG 근거가 2개 겹칠 때 진입
         if confluence_score >= 2:
+            self.mitigated_ob_idx = recent_ob_idx
+            self.mitigated_fvg_idx = recent_fvg_idx
             return Signal(Action.ENTER_LONG, self.name, reason="OB_and_FVG_confluence", meta=meta)
         
         return Signal(Action.HOLD, self.name, reason="waiting_confluence", meta=meta)

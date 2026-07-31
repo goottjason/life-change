@@ -280,7 +280,7 @@ STRATEGY_SPECS: dict[str, StrategySpec] = {
                              use_dead_extras=False, always_active=True,
                              timeframe="minute15", entry_level=7.0),
     "easy_teaching": StrategySpec("easy_teaching", atr_stop_mult=1.5, rr=1.5, regime=Regime.RANGE,
-                                  timeframe="minute15", always_active=True)
+                                  timeframe="minute15", always_active=True, time_stop_bars=8)
 }
 
 # 가동 전략 (v1.4) — macd/rsi/cvd 는 장기·walk-forward·국면분해에서 모두 음의 기댓값으로
