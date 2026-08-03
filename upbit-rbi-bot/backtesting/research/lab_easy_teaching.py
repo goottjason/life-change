@@ -55,8 +55,18 @@ def trend_htf(df: pd.DataFrame) -> np.ndarray:
     return up.shift(1).reindex(df.index, method="ffill").astype(float).fillna(0.0).to_numpy(bool)
 
 
+COST_MODEL = "full"     # "full" = 수수료 + 실측 스프레드 전액 / "fee" = 수수료만
+
+
 def cost_ratio(market: str) -> float:
-    """왕복 비용 = 수수료 0.1% + 실측 스프레드(보수적으로 전액 부담)."""
+    """
+    왕복 비용.
+      full — 수수료 0.1% + 종목별 실측 스프레드 전액. 시장가로 스프레드를 다 문다는 가정.
+      fee  — 수수료 0.1% 만. 지정가가 전량 스프레드 없이 체결된다는 **낙관적** 가정.
+    실제는 둘 사이다. 두 값을 같이 보면 '엣지가 체결 품질에 달렸는가'를 가를 수 있다.
+    """
+    if COST_MODEL == "fee":
+        return C.FEE_ROUNDTRIP
     sym = market.split("-", 1)[-1]
     return C.FEE_ROUNDTRIP + C.VALIDATED_MARKETS.get(sym, 0.0025)
 

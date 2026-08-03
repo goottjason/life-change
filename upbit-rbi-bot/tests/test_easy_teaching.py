@@ -214,3 +214,114 @@ def test_어떤_전략도_종목간_공유상태를_두지_않는다():
     for name, s in build_strategies(tuple(STRATEGY_SPECS)).items():
         extra = set(vars(s)) - allowed
         assert not extra, f"{name} 이 종목 간 공유되는 상태를 들고 있다: {extra}"
+
+
+# ── 페이크아웃 / 트랩 (원문 ⑤ "★가장 중요★") ────────────────
+from dataclasses import replace                                  # noqa: E402
+from strategies.easy_teaching import PIVOT_K, MAX_SWEEP_BARS     # noqa: E402
+
+
+def fk_strat(mode="fakeout", require_trend=True) -> EasyTeachingStrategy:
+    spec = replace(STRATEGY_SPECS["easy_teaching"],
+                   confluence_mode=mode, require_trend=require_trend)
+    return EasyTeachingStrategy(spec)
+
+
+def support_bars(sweep_depth=6.0, sweep_len=1, reclaim=True, bullish=True) -> list[tuple]:
+    """
+    지지 스윙 저점(990)을 만들고, 그 아래로 스윕한 뒤 되찾는 형태를 만든다.
+      - 피벗 저점: 좌우 PIVOT_K 봉보다 낮은 저점 990
+      - 스윕: 990 아래로 sweep_depth 만큼, sweep_len 봉 동안
+      - 되찾기: 확인봉이 990 위에서 양봉 마감
+    """
+    bars = filler(50)
+    bars += [(1005.0, 1010.0, 1000.0, 1004.0)] * PIVOT_K      # 피벗 좌측
+    bars += [(1004.0, 1006.0, 990.0, 1000.0)]                 # ← 스윙 저점 990
+    bars += [(1000.0, 1012.0, 998.0, 1010.0)] * PIVOT_K       # 피벗 우측(확정)
+    bars += [(1010.0, 1015.0, 1005.0, 1008.0)]                # 반등 — 목표가 될 고점
+    lo = 990.0 - sweep_depth
+    bars += [(1000.0, 1002.0, lo, 992.0)] * sweep_len         # 스윕(레벨 이탈)
+    if reclaim:
+        close = 998.0 if bullish else 985.0
+        open_ = 993.0 if bullish else 999.0
+        bars += [(open_, 1000.0, 991.0, close)]               # 확인봉
+    return bars
+
+
+def fk_run(bars, mode="fakeout", ctx={"trend_up": True}, require_trend=True):
+    return fk_strat(mode, require_trend).signal(make_df(bars + [INCOMPLETE]), ctx)
+
+
+def test_지지_스윕후_되찾기면_진입한다():
+    sig = fk_run(support_bars())
+    assert sig.action == Action.ENTER_LONG
+    assert "스윕 후 되찾기" in sig.reason
+
+
+def test_손절은_뚫고내려간_최저점이다():
+    """원문: '뚫고 내려갔던 최저점이 매우 명확한 손절 라인'."""
+    sig = fk_run(support_bars(sweep_depth=6.0))
+    assert sig.stop_price == pytest.approx(984.0)      # 990 − 6
+
+
+def test_목표는_지지형성_이후의_고점이다():
+    sig = fk_run(support_bars())
+    assert sig.target_price == pytest.approx(1015.0)
+
+
+def test_단일바닥은_페이크아웃_이중바닥은_트랩():
+    v = fk_run(support_bars(sweep_len=1))
+    assert v.meta["setup"] == "fakeout"
+    bars = support_bars(sweep_len=1)
+    bars.insert(-1, (992.0, 999.0, 991.0, 998.0))      # 잠깐 올라왔다가
+    bars.insert(-1, (998.0, 999.0, 986.0, 993.0))      # 다시 뚫는다 → W자
+    w = fk_run(bars)
+    assert w.meta["setup"] == "trap"
+
+
+def test_되찾지_못하면_진입하지_않는다():
+    sig = fk_run(support_bars(reclaim=False))
+    assert sig.action == Action.HOLD
+
+
+def test_확인봉이_레벨_아래면_진입하지_않는다():
+    """구조물 안으로 되돌아오지 못했으면 함정이 아니라 진짜 이탈이다."""
+    sig = fk_run(support_bars(bullish=False))
+    assert sig.action == Action.HOLD
+
+
+def test_이탈이_오래_지속되면_함정이_아니다():
+    sig = fk_run(support_bars(sweep_len=MAX_SWEEP_BARS + 2))
+    assert sig.action == Action.HOLD
+
+
+def test_노이즈_수준으로_살짝_뚫린_것은_스윕이_아니다():
+    sig = fk_run(support_bars(sweep_depth=0.05))
+    assert sig.action == Action.HOLD
+
+
+def test_손익비가_구조적으로_크다():
+    """손절이 스윕 저점 바로 아래라 목표까지의 거리가 손절거리보다 훨씬 크다."""
+    sig = fk_run(support_bars())
+    entry = 998.0
+    rr = (sig.target_price - entry) / (entry - sig.stop_price)
+    assert rr > 1.2, f"RR {rr:.2f}"
+
+
+def test_추세필터를_끄면_하락추세에서도_진입한다():
+    """원문의 페이크아웃 예시는 '하락 채널 하단'이다 — 축으로 검증할 수 있어야 한다."""
+    on = fk_run(support_bars(), ctx={"trend_up": False}, require_trend=True)
+    off = fk_run(support_bars(), ctx={"trend_up": False}, require_trend=False)
+    assert on.action == Action.HOLD
+    assert off.action == Action.ENTER_LONG
+
+
+def test_ob_fvg_모드는_페이크아웃을_보지_않는다():
+    """모드별로 근거 조합이 분리돼야 백테스트에서 기여도를 가를 수 있다."""
+    sig = fk_run(support_bars(), mode="ob_fvg")
+    assert sig.action == Action.HOLD
+
+
+def test_fakeout_zone_모드는_존_겹침까지_요구한다():
+    sig = fk_run(support_bars(), mode="fakeout_zone")
+    assert sig.action == Action.HOLD          # 이 픽스처엔 겹치는 OB/FVG 가 없다
