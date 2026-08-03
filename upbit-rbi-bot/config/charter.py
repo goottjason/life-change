@@ -38,6 +38,21 @@ ATR_SHRINK_RATIO = 0.5              # 변동성 축소 판정: 진입시 ATR의 
 LIMIT_UNFILLED_TIMEOUT_SEC = 30     # 지정가 미체결 취소 시간 (§6.3)
 LIMIT_REORDER_MAX = 1               # 미체결 재주문 허용 횟수 (§6.3)
 
+# ── 청산 실패 백오프 (§6.7, v2.7) ────────────────────────────
+# 실매매에서 청산 실패를 **매 tick(13초)** 재시도해 10시간 42분 동안 2,854건이 쌓였다.
+# 원인은 5,000원 미만 먼지 잔량 — 몇 번을 다시 보내도 성공할 수 없는 주문이었다.
+# 실패가 반복되면 간격을 지수적으로 벌려 API·로그를 아끼고, 임계치를 넘으면 한 번만 경보한다.
+EXIT_RETRY_BASE_SEC = 30            # 1차 실패 후 대기
+EXIT_RETRY_MAX_SEC = 1800           # 백오프 상한 30분
+EXIT_FAIL_ALERT_AFTER = 5           # 이 횟수를 넘으면 '수동 확인 필요' 경보(1회)
+
+
+def exit_retry_delay_sec(failures: int) -> float:
+    """연속 청산 실패 횟수 → 다음 재시도까지 대기(초). 30s→60s→120s… 최대 30분."""
+    if failures <= 0:
+        return 0.0
+    return min(EXIT_RETRY_BASE_SEC * (2 ** (failures - 1)), EXIT_RETRY_MAX_SEC)
+
 # ── 백테스트 통과 기준 (헌장 §11) ────────────────────────────
 BACKTEST_MIN_WINRATE = 0.55
 BACKTEST_MIN_PROFIT_FACTOR = 1.5
@@ -238,6 +253,10 @@ class StrategySpec:
     use_dead_extras: bool = True    # §4-A의 부가 규칙(횡보·신호중립·ATR축소) 사용 여부
     always_active: bool = False     # True면 레짐 필터(§8)를 통과시킨다
     timeframe: str = BASE_TIMEFRAME  # 이 전략이 판단에 쓰는 봉 (pyupbit interval)
+    # ── v2.7 추가: 구조 기반 청산(반익반본). easy_teaching 실매매 실패 분석의 결과 ──
+    # 0.0 이면 미사용(기존 전량 단일 청산). 0.5 면 1차 목표에서 절반 청산 후
+    # 나머지는 진입가 본절 스탑으로 추세를 태운다(원문 '반익반본').
+    partial_tp_ratio: float = 0.0
 
     @property
     def risk_reward(self) -> float:
@@ -279,13 +298,79 @@ STRATEGY_SPECS: dict[str, StrategySpec] = {
                              stop_pct=0.030, min_atr_ratio=0.004, time_stop_bars=32,
                              use_dead_extras=False, always_active=True,
                              timeframe="minute15", entry_level=7.0),
+    # easy_teaching (v2.7 재설계) — 청산을 원문(docs/strategies/easy-teaching-man)대로 되돌렸다.
+    # 실매매 실패의 1차 원인은 신호가 아니라 청산 설계였다(ACTIVE_STRATEGIES 주석 참조):
+    #   ① 손절 = 오더블록 생성 캔들의 저점(구조적 무효화 지점). ATR 배수·1% 하한이 아니다.
+    #      → 전략이 Signal.stop_price 로 자리마다 다른 값을 넘긴다. atr_stop_mult 는 폴백일 뿐.
+    #   ② 익절 = 직전 스윙 고점에서 **절반 청산** → 나머지는 진입가 본절 스탑(partial_tp_ratio).
+    #      고정 rr 배수(1.5 → 최소 +1.5%)는 15분봉 MFE(평균 +0.44%)로는 닿을 수 없었다.
+    #   ③ 횡보청산(±0.5%/12봉)은 원문에 없는 규칙이고 13건 중 4건을 죽였다 → use_dead_extras=False.
+    #   ④ 시간손절 8봉(2시간)은 '익절 못 가면 비용만 내고 나감'이었다 → 48봉(12시간)으로 넓힌다.
+    #      원문에 시간손절은 없지만 오펀 방지 안전장치로 남긴다.
+    # ⚠ **§11 미통과 — 폐기 상태다.** ACTIVE_STRATEGIES 에 넣지 않는다.
+    #   위 재설계를 마친 뒤 백테스트한 결과(backtesting/research/lab_easy_teaching.py,
+    #   14종목·비용 = 수수료 0.1% + 실측 스프레드 전액):
+    #     15분봉 518거래 승률 26.6% PF 0.58 거래당 −0.211% t −4.04 (13/14 종목 음수)
+    #     1시간봉  98거래 승률 32.7% PF 0.80 거래당 −0.209% t −0.69
+    #     4시간봉  16거래 승률 37.5% PF 0.94 거래당 −0.107% t −0.10
+    #   핵심: **거래당 gross 엣지 +0.04~0.12% vs 왕복비용 0.23~0.26%** — 비용이 엣지의 2~6배다.
+    #   청산을 원문대로 고쳐도 결과가 바뀌지 않았다 → 문제는 청산이 아니라 진입 신호의 엣지 크기다.
+    #   되살리려면 backtesting/research/README.md 의 그 표를 먼저 뒤집어야 한다.
     "easy_teaching": StrategySpec("easy_teaching", atr_stop_mult=1.5, rr=1.5, regime=Regime.RANGE,
-                                  timeframe="minute15", always_active=True, time_stop_bars=8)
+                                  timeframe="minute15", always_active=True, time_stop_bars=48,
+                                  use_dead_extras=False, partial_tp_ratio=0.5)
 }
 
 # 가동 전략 (v1.4) — macd/rsi/cvd 는 장기·walk-forward·국면분해에서 모두 음의 기댓값으로
 # 확인되어 비활성화한다(backtesting/research/README.md). 되살리려면 §11 기준을 먼저 통과해야 한다.
-ACTIVE_STRATEGIES: tuple[str, ...] = ("rsi2", "rsi2_15m", "easy_teaching")
+#
+# easy_teaching 은 2026-08-03 에 **비활성화**했다 (실매매 결과 분석).
+#   실적: 2026-07-30~08-01 진입 16건 / 청산 15건 / 1승, 거래당 평균 −0.379%, 합계 약 −1,886원.
+#   청산 15건이 **전부 dead(시간손절·횡보)** 였다 — 익절·손절·역신호 청산 0건.
+#   원인은 신호가 아니라 청산 설계다: 익절선 = rr 1.5 × max(1.5×ATR/가격, 1%) 로 **최소 +1.5%**
+#   인데 시간손절 8봉(2시간)·횡보청산 12봉이 먼저 발동한다. 실측 MFE 평균 +0.44%, 최대 +1.42%
+#   → **13건 중 익절 도달 0건**. 이길 수 있는 경로가 존재하지 않는 조합이었다(통계가 아니라 산술).
+#   배경: §11 백테스트 0건·인큐베이션 생략으로 실계좌 투입됐고, ACTIVE_STRATEGIES 를 바꾸면서
+#   CHARTER_VERSION 을 올리지 않아 §9.7 승인 게이트도 통과했다(→ charter_fingerprint 로 수정).
+#   복귀 조건: §11 통과(승률>55%·PF>1.5·MDD<20%·100거래+) → 5,000원 인큐베이션 2~4주.
+ACTIVE_STRATEGIES: tuple[str, ...] = ("rsi2", "rsi2_15m")
+
+
+# ── §11 검증 단계 (v2.7) ─────────────────────────────────────
+# §11 은 백테스트 통과 → **5,000원 인큐베이션 2~4주** → 점진 확대 순서를 규정한다.
+# 그런데 코드에 이 단계가 없어서 easy_teaching 은 백테스트도 인큐베이션도 없이 첫 거래부터
+# 30,000원(자본의 1/3)으로 들어갔다. 이제 단계를 코드에 새긴다.
+#
+# VALIDATED — §11 백테스트를 통과했고 근거가 문서로 남은 전략(위 스펙 주석 참조).
+# INCUBATING — 통과했지만 아직 실전 관찰 중. 주문금액을 최소주문금액으로 강제한다.
+# 둘 중 어디에도 없는 전략은 ACTIVE_STRATEGIES 에 넣을 수 없다(tests/test_charter.py 가 막는다).
+VALIDATED_STRATEGIES: frozenset[str] = frozenset({"rsi2", "rsi2_15m"})
+INCUBATING_STRATEGIES: frozenset[str] = frozenset()
+
+
+def position_cap_for(strategy: str, krw: float) -> float:
+    """인큐베이션 중인 전략은 최소주문금액으로 묶는다 (§11-3)."""
+    return min(krw, float(MIN_ORDER_KRW)) if strategy in INCUBATING_STRATEGIES else krw
+
+
+# ── 실거래 승인 지문 (§9.7, v2.7) ────────────────────────────
+# §9.7 은 "헌장이 개정되면 실거래 승인(LIVE_CHARTER_ACK)이 무효화된다"는 장치인데,
+# **버전 문자열만** 비교했다. 그래서 2026-07-30 에 easy_teaching 을 ACTIVE_STRATEGIES 에
+# 새로 넣고 스펙을 두 번 고치는 동안 CHARTER_VERSION 은 "v2.5" 그대로였고, 서버의
+# LIVE_CHARTER_ACK=v2.5 가 그대로 통과해 **검증 한 번 없는 전략이 실계좌에서 돌았다**.
+# 이제 '가동 전략 목록 + 그 전략들의 스펙'까지 지문에 넣는다 — 사람이 버전을 올리는 것을
+# 잊어도 매매 규칙이 바뀌면 승인이 자동으로 무효화된다.
+def charter_fingerprint() -> str:
+    """실거래 승인 대상 = 헌장 버전 + 가동 전략과 그 스펙. 바뀌면 재승인이 필요하다."""
+    import hashlib
+
+    parts = [CHARTER_VERSION]
+    for name in sorted(ACTIVE_STRATEGIES):
+        spec = STRATEGY_SPECS[name]
+        fields = sorted(f"{k}={v!r}" for k, v in vars(spec).items())
+        parts.append(f"{name}({','.join(fields)})")
+    digest = hashlib.sha256("|".join(parts).encode()).hexdigest()[:8]
+    return f"{CHARTER_VERSION}-{digest}"
 
 # ── 파생 계산 헬퍼 (모두 '현재 자본(capital)'을 인자로 받는다) ──────────────
 # capital = 실계좌 총 자산(원화 + 보유코인 평가액). 입금하면 자동으로 커지고,
@@ -333,6 +418,32 @@ def stop_ratio_from_atr(atr_stop_mult: float, entry_atr: float, entry_price: flo
     if entry_price > 0 and entry_atr > 0:
         return max(atr_stop_mult * entry_atr / entry_price, MIN_STOP_RATIO)
     return FALLBACK_STOP_RATIO
+
+
+# ── 구조 기반 진입 필터 (v2.7, easy_teaching 실패 분석) ──────
+# 손절을 '근거가 깨지는 지점'에 두면 손익비가 자리마다 달라진다. 그래서 손익비 자체가
+# 자리 필터가 된다 — 목표까지의 거리가 손절거리의 MIN_ENTRY_RR 배에 못 미치면 진입하지 않는다.
+# 이 필터가 있으면 "익절이 산술적으로 도달 불가능한 자리"를 진입 단계에서 걸러낸다.
+MIN_ENTRY_RR = 1.2           # 진입 최소 손익비 (목표거리 ÷ 손절거리)
+MAX_STRUCT_STOP_RATIO = 0.05  # 구조적 손절거리 상한 5%. 이보다 멀면 '자리'로 보지 않는다
+
+
+def entry_rr(entry: float, stop: float, target: float) -> float:
+    """구조 레벨로 계산한 손익비. 손절거리가 유효하지 않으면 0.0."""
+    risk = entry - stop
+    if entry <= 0 or risk <= 0:
+        return 0.0
+    return (target - entry) / risk
+
+
+def entry_rr_ok(entry: float, stop: float, target: float) -> bool:
+    """진입 손익비 게이트 (§7, v2.7). 손절이 진입가 위이거나 너무 멀면 진입 불가."""
+    risk = entry - stop
+    if entry <= 0 or risk <= 0:
+        return False
+    if risk / entry > MAX_STRUCT_STOP_RATIO:
+        return False
+    return entry_rr(entry, stop, target) >= MIN_ENTRY_RR
 
 
 def strategy_spread_cap(strategy: str) -> float:

@@ -62,6 +62,14 @@ class RiskManager:
     def on_open(self) -> None:
         self.s.open_positions += 1
 
+    def on_partial_close(self, pnl_krw: float) -> None:
+        """
+        반익절 반영 (§4.1-A, v2.7). 포지션은 아직 살아 있으므로 open_positions 는 줄이지
+        않고, 연속손실(§5.3)도 건드리지 않는다 — 승패 판정은 최종 청산에서 한 번만 한다.
+        당일 손익(§5.2)에는 실현된 만큼 즉시 반영한다.
+        """
+        self.s.daily_pnl += pnl_krw
+
     def on_close(self, pnl_krw: float) -> None:
         self.s.open_positions = max(0, self.s.open_positions - 1)
         self.s.daily_pnl += pnl_krw

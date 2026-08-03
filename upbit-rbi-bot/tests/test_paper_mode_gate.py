@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from config.charter import CHARTER_VERSION
+from config.charter import CHARTER_VERSION, charter_fingerprint
 from config.settings import _resolve_dry_run, forced_paper_reason
 
 
@@ -48,11 +48,11 @@ def test_이전_헌장버전_승인은_무효(env):
 
 
 def test_현재_헌장버전_승인시_실거래(env):
-    env(dry_run="false", ack=CHARTER_VERSION)
+    env(dry_run="false", ack=charter_fingerprint())
     assert _resolve_dry_run() is False
     assert forced_paper_reason() == ""
 
 
 def test_공백_섞인_승인값도_허용(env):
-    env(dry_run="false", ack=f"  {CHARTER_VERSION} ")
+    env(dry_run="false", ack=f"  {charter_fingerprint()} ")
     assert _resolve_dry_run() is False

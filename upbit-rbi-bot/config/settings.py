@@ -7,7 +7,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from config.charter import CHARTER_VERSION
+from config.charter import CHARTER_VERSION, charter_fingerprint
 
 try:
     from dotenv import load_dotenv
@@ -30,24 +30,39 @@ def _resolve_dry_run() -> bool:
 
     이유: 전략 교체(v1.3: macd/rsi/cvd → rsi2)처럼 매매 로직이 바뀐 코드가 배포되면
     이전 승인으로 실계좌가 계속 돌아가는 것이 가장 위험하다. 새 규칙은 모의로 먼저 검증한다.
+
+    v2.7 — 비교 대상이 버전 문자열에서 **지문(charter_fingerprint)** 으로 바뀌었다.
+    버전만 보던 시절, easy_teaching 을 새로 켜면서 CHARTER_VERSION 을 안 올리는 바람에
+    검증 한 번 없는 전략이 이전 승인으로 실계좌에서 돌았다. 이제 가동 전략이나 그 스펙이
+    바뀌면 사람이 버전을 잊어도 승인이 자동 무효화된다.
+
+    ⚠ 버전 문자열만 넣는 구버전 승인("v2.5")은 **더 이상 통과하지 않는다**. 통과시키면
+      그 값이 스펙 변경과 무관하게 영원히 유효해져 이 장치가 다시 무의미해진다.
+      → 이 코드를 배포하면 서버는 모의 모드로 강제된다. 실거래를 이어가려면 서버 .env 의
+        LIVE_CHARTER_ACK 을 charter_fingerprint() 값으로 갱신해야 한다(의도된 동작이다).
     """
     if os.getenv("DRY_RUN", "true").lower() == "true":
         return True
-    return _live_ack() != CHARTER_VERSION
+    return not _ack_matches()
+
+
+def _ack_matches() -> bool:
+    return _live_ack() == charter_fingerprint()
 
 
 def forced_paper_reason() -> str:
     """실거래를 요청했는데 모의로 강제된 경우의 사유(알림용). 아니면 빈 문자열."""
     if os.getenv("DRY_RUN", "true").lower() == "true":
         return ""
-    ack = _live_ack()
-    if ack == CHARTER_VERSION:
+    if _ack_matches():
         return ""
+    fp = charter_fingerprint()
+    ack = _live_ack()
     if not ack:
-        return (f"LIVE_CHARTER_ACK 미설정 — 헌장 {CHARTER_VERSION} 규칙을 모의로 검증 후 "
-                f"`LIVE_CHARTER_ACK={CHARTER_VERSION}` 설정 시 실거래 전환")
-    return (f"LIVE_CHARTER_ACK={ack} 이지만 현재 헌장은 {CHARTER_VERSION} — "
-            f"규칙이 개정되었으므로 모의로 강제 (재승인 필요)")
+        return (f"LIVE_CHARTER_ACK 미설정 — 헌장 {fp} 규칙을 모의로 검증 후 "
+                f"`LIVE_CHARTER_ACK={fp}` 설정 시 실거래 전환")
+    return (f"LIVE_CHARTER_ACK={ack} 이지만 현재 헌장 지문은 {fp} — "
+            f"헌장 또는 **가동 전략 스펙**이 바뀌었으므로 모의로 강제 (재승인 필요)")
 
 
 @dataclass(frozen=True)

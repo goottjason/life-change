@@ -70,40 +70,51 @@ class UpbitClient:
         return float(pyupbit.get_current_price(market))
 
     # ── 주문 (인증 필요) — 헌장 §6 ───────────────────────────
+    #
+    # ⚠ pyupbit 의 주문 메서드(buy_limit_order/sell_limit_order/sell_market_order)는 쓰지
+    #   않는다. 세 메서드 모두 본문이 `except Exception as x: print(x.__class__.__name__);
+    #   return None` 이라 **실패 원인을 통째로 삼키고 None 을 돌려준다**.
+    #   실매매에서 이 때문에 `unexpected response: None` 만 2,854건 쌓였고(2026-07-31,
+    #   10시간 42분) 원인 파악이 불가능했다. 실제 원인은 5,000원 미만 먼지 잔량이었는데
+    #   pyupbit 가 raise 한 typed exception 이 지워져 그 사실이 로그에 남지 않았다.
+    #   그래서 인증 헤더 생성만 빌려 쓰고 POST 는 직접 호출한다 → 429/400/타임아웃이
+    #   원문 그대로 reason 에 남는다.
+    def _place_order(self, data: dict) -> OrderResult:
+        try:
+            from pyupbit.request_api import _send_post_request
+            headers = self._upbit._request_headers(data)
+            resp, _ = _send_post_request("https://api.upbit.com/v1/orders",
+                                         headers=headers, data=data)
+        except Exception as e:
+            return OrderResult(ok=False, error=f"{type(e).__name__}: {e}".strip(": "))
+        return self._parse(resp)
+
     def buy_limit(self, market: str, price: float, krw: float) -> OrderResult:
         volume = krw / price
         if settings.dry_run:
             return OrderResult(ok=True, order_id="DRY", filled_volume=volume, avg_price=price)
-        try:
-            safe_price = pyupbit.get_tick_size(price)
-            safe_vol = f"{volume:.8f}"
-            resp = self._upbit.buy_limit_order(market, safe_price, safe_vol)
-        except Exception as e:
-            return OrderResult(ok=False, error=f"buy_limit exception: {e}")
-        return self._parse(resp)
+        return self._place_order({
+            "market": market, "side": "bid", "ord_type": "limit",
+            "price": str(pyupbit.get_tick_size(price)), "volume": f"{volume:.8f}",
+        })
 
     def sell_limit(self, market: str, price: float, volume: float) -> OrderResult:
         if settings.dry_run:
             return OrderResult(ok=True, order_id="DRY", filled_volume=volume, avg_price=price)
-        try:
-            safe_price = pyupbit.get_tick_size(price)
-            safe_vol = f"{volume:.8f}"
-            resp = self._upbit.sell_limit_order(market, safe_price, safe_vol)
-        except Exception as e:
-            return OrderResult(ok=False, error=f"sell_limit exception: {e}")
-        return self._parse(resp)
+        return self._place_order({
+            "market": market, "side": "ask", "ord_type": "limit",
+            "price": str(pyupbit.get_tick_size(price)), "volume": f"{volume:.8f}",
+        })
 
     def sell_market(self, market: str, volume: float) -> OrderResult:
         """손절 전용 — 체결 확실성 우선 (§6.2)."""
         if settings.dry_run:
             price = self.get_price(market)
             return OrderResult(ok=True, order_id="DRY", filled_volume=volume, avg_price=price)
-        try:
-            safe_vol = f"{volume:.8f}"
-            resp = self._upbit.sell_market_order(market, safe_vol)
-        except Exception as e:
-            return OrderResult(ok=False, error=f"sell_market exception: {e}")
-        return self._parse(resp)
+        return self._place_order({
+            "market": market, "side": "ask", "ord_type": "market",
+            "volume": f"{volume:.8f}",
+        })
 
     def cancel(self, order_id: str) -> bool:
         if settings.dry_run:

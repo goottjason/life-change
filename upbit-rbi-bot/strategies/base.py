@@ -27,6 +27,12 @@ class Signal:
     meta: dict = field(default_factory=dict)
     """관찰용 수치 (v1.5). 대시보드에서 '왜 진입하지 않는가'를 보여주기 위한 것으로,
     매매 판단에는 쓰지 않는다. rsi2 는 {"rsi2","atr_pct","trend_up","gate"} 를 채운다."""
+    # ── v2.7: 구조 기반 청산 레벨 ──
+    # meta 와 달리 이 둘은 **매매 판단에 쓰인다**. 전략이 '근거가 깨지는 지점'과 '1차 목표'를
+    # 자리마다 다르게 정할 수 있어야 원문의 손익비가 성립하기 때문이다(easy_teaching).
+    # None 이면 트레이더가 기존 ATR 비율 청산을 쓴다 → rsi2 계열은 동작이 바뀌지 않는다.
+    stop_price: float | None = None      # 손절 가격 (예: 오더블록 생성 캔들의 저점)
+    target_price: float | None = None    # 1차 목표 가격 (예: 직전 스윙 고점)
 
 
 class BaseStrategy(ABC):

@@ -68,6 +68,31 @@ class OrderManager:
         mkt.filled_volume += filled            # 지정가에서 판 부분 합산
         return mkt
 
+    # ── 반익절 (§4.1-A, v2.7) ────────────────────────────────
+    def exit_partial(self, pos: Position, price: float, volume: float) -> OrderResult:
+        """
+        포지션의 일부만 판다. 1차 목표 도달은 '반드시 나가야 하는' 상황이 아니므로
+        지정가로 시도하되, 미체결이면 취소만 하고 시장가로 밀지 않는다 — 나머지 절반은
+        어차피 들고 갈 물량이라 다음 tick 에 다시 시도하면 된다.
+        파는 쪽·남는 쪽 모두 최소주문금액을 넘어야 한다(먼지 잔량 방지).
+        """
+        if volume <= 0 or volume >= pos.volume:
+            return OrderResult(ok=False, error="invalid partial volume")
+        if min(volume, pos.volume - volume) * price < MIN_ORDER_KRW:
+            return OrderResult(ok=False, error=f"partial below min order {MIN_ORDER_KRW}")
+
+        res = self.client.sell_limit(pos.market, price, volume)
+        if not res.ok:
+            return res
+        self._wait_fill(pos.market, res)
+        res = self._confirm_fill(res, expected_volume=volume)
+        if res.filled_volume <= 0:
+            self.client.cancel(res.order_id)
+            return OrderResult(ok=False, error="partial unfilled — retry next tick")
+        if res.filled_volume < volume * (1 - 1e-9):
+            self.client.cancel(res.order_id)   # 부분체결분만 인정, 잔량은 다시 포지션으로
+        return res
+
     # ── 내부 헬퍼 ────────────────────────────────────────────
     def _sell_market_confirmed(self, market: str, volume: float) -> OrderResult:
         if volume <= 0:

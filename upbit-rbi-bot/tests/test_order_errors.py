@@ -37,11 +37,14 @@ def test_buy_limit_catches_exception_as_error(monkeypatch):
     c = UpbitClient()   # dry_run=True 로 생성(키 불필요)
     monkeypatch.setattr("data.upbit_client.settings", _FakeSettings())  # 이후 실주문 경로 강제
 
+    # v2.7: pyupbit 의 buy_limit_order 는 예외를 삼키고 None 을 돌려주므로 쓰지 않는다.
+    # 인증 헤더 생성만 빌려 쓰고 POST 는 직접 하므로, 예외는 여기서 난다.
     class Boom:
-        def buy_limit_order(self, *a, **k):
+        def _request_headers(self, *a, **k):
             raise RuntimeError("network down")
 
     c._upbit = Boom()
     res = c.buy_limit("KRW-BTC", 100.0, 30_000)
     assert not res.ok
     assert "network down" in res.error
+    assert "RuntimeError" in res.error, "예외 타입도 남아야 원인 추적이 된다"

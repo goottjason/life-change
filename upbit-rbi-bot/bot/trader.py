@@ -10,6 +10,8 @@
 """
 from __future__ import annotations
 
+import sqlite3
+import time
 from dataclasses import dataclass, field
 
 import pandas as pd
@@ -24,7 +26,7 @@ from bot.order_manager import OrderManager
 from bot.risk_manager import RiskManager
 from bot.position import Position, ExitReason
 from bot import dead_position
-from strategies.base import BaseStrategy, Action
+from strategies.base import BaseStrategy, Action, Signal
 from strategies.macd import MacdStrategy
 from strategies.rsi_mean_reversion import RsiMeanReversionStrategy
 from strategies.cvd import CvdStrategy
@@ -56,6 +58,21 @@ def build_strategies(names: tuple[str, ...] | None = None) -> dict[str, BaseStra
     """
     picked = names if names is not None else C.ACTIVE_STRATEGIES
     return {n: ALL_STRATEGIES[n](STRATEGY_SPECS[n]) for n in picked}
+
+
+def last_entry_strategy(market: str) -> str | None:
+    """
+    이 코인을 마지막으로 '진입'한 전략 (§9.3, v2.7). 오펀 복구가 원래 전략으로 귀속되게
+    하려고 DB를 조회한다. 기록이 없거나 DB를 읽지 못하면 None → 호출측이 빈 슬롯 폴백.
+    """
+    try:
+        with sqlite3.connect(settings.db_path) as con:
+            row = con.execute(
+                "SELECT strategy FROM trades WHERE market=? AND event='entry'"
+                " ORDER BY id DESC LIMIT 1", (market,)).fetchone()
+    except sqlite3.Error:
+        return None
+    return row[0] if row else None
 
 
 class Trader:
@@ -101,6 +118,20 @@ class Trader:
                 f"실거래 주문은 전송되지 않습니다. 신호·손익은 그대로 기록되므로 "
                 f"대시보드로 검증할 수 있습니다.")
 
+    @staticmethod
+    def _recover_slot(market: str, taken: set[str], strategies) -> str | None:
+        """
+        오펀을 어느 전략 슬롯에 붙일지 정한다 (§9.3, v2.7).
+
+        DB의 마지막 entry 기록을 먼저 본다 — 실매매에서 easy_teaching 이 산 AVAX/XRP 가
+        재배포 후 아무 빈 슬롯(rsi2)으로 복구되어 −375원의 손실이 rsi2 장부에 기록됐다.
+        전략별 성과 비교가 통째로 무의미해지므로, 원래 산 전략으로 되돌린다.
+        """
+        original = last_entry_strategy(market)
+        if original and original in strategies and f"{original}:{market}" not in taken:
+            return original
+        return next((n for n in strategies if f"{n}:{market}" not in taken), None)
+
     def _recover_positions(self) -> None:
         """
         재시작 시 실계좌 잔고를 읽어 '봇이 모르는 보유 코인(오펀)'을 포지션으로 복원한다 (§9.3).
@@ -110,10 +141,9 @@ class Trader:
         known = {p.market for p in self.positions.values()}
         orphans = self.failsafe.recover_state(known_markets=known)
         for o in orphans:
-            # v1.4: 포지션 키가 '전략:코인'이라 같은 코인만 아니면 어느 전략에든 붙일 수 있다.
-            # 기준봉 전략(5분)에 먼저 배정하고, 이미 그 코인을 들고 있으면 다른 전략을 찾는다.
-            slot = next((n for n, s in self.strategies.items()
-                         if f"{n}:{o['market']}" not in self.positions), None)
+            # v2.7: 원래 산 전략으로 되돌린다(없으면 빈 슬롯). 아무 슬롯에나 꽂으면
+            # 진입한 적 없는 전략이 남의 손익을 뒤집어써 통계가 오염된다.
+            slot = self._recover_slot(o["market"], set(self.positions), self.strategies)
             if slot is None:
                 self.notifier.send(
                     f"⚠️ 오펀 코인 {o['market']} 복원 실패: 빈 전략 슬롯 없음 — 수동 확인 필요")
@@ -229,6 +259,9 @@ class Trader:
             price = float(df["close"].iloc[-1])
             pos.update_high(price)
             reason = pos.check_price_exit(price)           # TP/SL (§4.1~2)
+            if reason == ExitReason.PARTIAL_TAKE_PROFIT:   # 반익절 (§4.1-A, v2.7)
+                self._take_partial(pos, price)
+                continue                                   # 포지션 유지 — 청산이 아니다
             why = ""
             if reason == ExitReason.NONE:
                 dead, why = dead_position.is_dead(pos, df)  # §4-A
@@ -286,15 +319,33 @@ class Trader:
                 continue
             if self._is_duplicate(market):         # 동일코인 중복 금지 (§3.3)
                 continue
-            self._open(name, strat, market, float(df["close"].iloc[-1]), df, note=sig.reason)
+            self._open(name, strat, market, float(df["close"].iloc[-1]), df,
+                       note=sig.reason, sig=sig)
 
     # ── 진입/청산 실행 ───────────────────────────────────────
     def _open(self, name: str, strat: BaseStrategy, market: str,
-              price: float, df: pd.DataFrame, note: str = "") -> None:
+              price: float, df: pd.DataFrame, note: str = "",
+              sig: Signal | None = None) -> None:
         entry_atr = float(ta.atr(df).iloc[-1]) if len(df) >= 14 else 0.0
         if not (entry_atr > 0):
             self.logger.log("entry_fail", strategy=name, market=market, reason="no atr")
             return
+
+        # 구조 레벨(§4, v2.7): 전략이 손절·목표 '가격'을 넘기면 손익비를 먼저 검사한다.
+        # 손절을 근거가 깨지는 지점에 두면 손익비가 자리마다 달라지므로, 손익비 자체가
+        # 자리 필터가 된다 — 익절이 산술적으로 닿을 수 없는 자리를 여기서 걸러낸다.
+        stop_price = sig.stop_price if sig else None
+        target_price = sig.target_price if sig else None
+        if stop_price is not None and target_price is not None:
+            if not C.entry_rr_ok(price, stop_price, target_price):
+                rr = C.entry_rr(price, stop_price, target_price)
+                self.logger.log("entry_skip", strategy=name, market=market,
+                                reason=f"진입 취소: 손익비 {rr:.2f} < {C.MIN_ENTRY_RR} "
+                                       f"(진입 {price:.4g} 손절 {stop_price:.4g} "
+                                       f"목표 {target_price:.4g})")
+                return
+        else:
+            stop_price = target_price = None   # 둘 다 있어야 구조 청산이 성립한다
         # 주문 직전 스프레드 재확인 (§6, v1.6). 유니버스는 10분 주기로 갱신되므로
         # 스크리닝 시점의 스프레드가 최신이 아니다. 넓어졌으면 진입하지 않는다
         # (거래당 기댓값이 0.26% 수준이라 스프레드 0.1%p 차이가 손익을 가른다).
@@ -305,9 +356,14 @@ class Trader:
                                 reason=f"진입 취소: {why}")
                 return
 
-        # 고정 손절(spec.stop_pct)이 있으면 그 값, 없으면 ATR 정규화 (§7, v1.3)
-        stop_ratio = C.stop_ratio_for(strat.spec, entry_atr, price)
+        # 사이징 손절거리: 구조 레벨이 있으면 그 거리(하한 MIN_STOP_RATIO), 없으면 기존 규칙
+        # (spec.stop_pct 고정값 또는 ATR 정규화, §7 v1.3).
+        if stop_price is not None:
+            stop_ratio = max((price - stop_price) / price, C.MIN_STOP_RATIO)
+        else:
+            stop_ratio = C.stop_ratio_for(strat.spec, entry_atr, price)
         krw = self.risk.size_for(stop_ratio)                # §7.2 (ATR 정규화 v1.2)
+        krw = C.position_cap_for(name, krw)                 # §11-3 인큐베이션이면 5,000원
         # 잔고 부족 등으로 주문금액이 최소주문금액 미만이면 조용히 스킵(로그 스팸 방지)
         if krw < C.MIN_ORDER_KRW:
             return
@@ -320,24 +376,79 @@ class Trader:
             strategy=name, market=market, entry_price=res.avg_price or price,
             size_krw=krw, volume=res.filled_volume, entry_time=df.index[-1],
             entry_atr=entry_atr,
+            stop_price=stop_price, target_price=target_price,
         )
         self.positions[pos.key] = pos          # '전략:코인' 키 (v1.4)
         self.risk.on_open()
         self.logger.log("entry", strategy=name, market=market, price=price,
                         volume=res.filled_volume, size_krw=krw, reason=note)
 
+    def _take_partial(self, pos: Position, price: float) -> None:
+        """
+        반익절 (§4.1-A, v2.7) — 1차 목표(직전 고점)에서 절반만 판다.
+        원문의 '반익반본': 이미 수익을 확보했으므로 나머지는 본절 스탑을 걸고 추세를 태운다.
+        체결 실패/부분체결이면 아무것도 바꾸지 않는다 — 다음 tick 에 다시 시도한다
+        (여기서 상태만 바꾸면 실계좌와 어긋난 오펀이 된다).
+        """
+        sell_volume = pos.partial_exit_volume()
+        res = self.orders.exit_partial(pos, price, sell_volume)
+        if not res.ok or res.filled_volume <= 0:
+            self.logger.log("exit_fail", strategy=pos.strategy, market=pos.market,
+                            volume=sell_volume,
+                            reason=f"{ExitReason.PARTIAL_TAKE_PROFIT.value}:{res.error}")
+            return
+        fill_price = res.avg_price or price
+        # 실제 체결량이 목표보다 적었으면 실현손익도 그만큼만 잡는다
+        filled_ratio = min(1.0, res.filled_volume / sell_volume) if sell_volume > 0 else 0.0
+        pnl = pos.partial_pnl_krw(fill_price) * filled_ratio
+        pos.take_partial(fill_price)
+        pos.volume += max(0.0, sell_volume - res.filled_volume)   # 미체결분은 잔량으로 되돌린다
+        self.risk.on_partial_close(pnl)
+        self.logger.log("exit_partial", strategy=pos.strategy, market=pos.market,
+                        price=fill_price, volume=res.filled_volume, pnl_krw=pnl,
+                        reason=f"{ExitReason.PARTIAL_TAKE_PROFIT.value}:"
+                               f"1차목표 도달 — 절반 익절 후 본절 스탑")
+        self.notifier.send(
+            f"✅ 반익절 {pos.market} {res.filled_volume:.8f} @ {fill_price:.4g} "
+            f"(+{pnl:.0f}원) — 잔량 {pos.volume:.8f}, 손절을 본절({pos.entry_price:.4g})로 이동")
+
     def _close(self, pos: Position, price: float, reason: ExitReason, note: str = "") -> None:
+        # 청산 실패 백오프 (§6.7, v2.7): 직전 실패로 정한 대기 시간이 안 지났으면 건너뛴다.
+        # 실매매에서 팔 수 없는 주문(5,000원 미만 먼지)을 매 tick 재시도해 10시간 42분 동안
+        # 2,854건이 쌓였다 — 다시 보내도 성공할 수 없는 주문이었다.
+        if pos.retry_after and time.monotonic() < pos.retry_after:
+            return
+
         res = self.orders.exit_position(pos, price, reason)    # §6
         filled = res.filled_volume
 
         # 청산 실패(체결 0) → 포지션 유지. exit 로 기록하지 않는다(오펀 desync 방지).
         if not res.ok or filled <= 0:
-            self.logger.log("exit_fail", strategy=pos.strategy, market=pos.market,
-                            volume=pos.volume, reason=f"{reason.value}:{res.error}")
-            self.notifier.send(
-                f"⚠️ 청산 실패 {pos.market} ({reason.value}): {res.error or '체결 0'} "
-                f"— 포지션 유지, 다음 tick 재시도")
+            pos.exit_failures += 1
+            delay = C.exit_retry_delay_sec(pos.exit_failures)
+            pos.retry_after = time.monotonic() + delay
+            # 로그는 초반 몇 건만 남긴다(원인은 첫 건에 다 들어 있고, 나머지는 DB를 덮는다)
+            if pos.exit_failures <= C.EXIT_FAIL_ALERT_AFTER:
+                self.logger.log("exit_fail", strategy=pos.strategy, market=pos.market,
+                                volume=pos.volume,
+                                reason=f"{reason.value}:{res.error} "
+                                       f"(연속 {pos.exit_failures}회, {delay:.0f}초 후 재시도)")
+            if pos.exit_failures >= C.EXIT_FAIL_ALERT_AFTER and not pos.alerted:
+                pos.alerted = True             # 경보는 한 번만 — 알림 폭주 방지
+                self.notifier.send(
+                    f"🚨 청산 실패 {pos.exit_failures}회 연속 {pos.market} ({reason.value}): "
+                    f"{res.error or '체결 0'}\n"
+                    f"보유 {pos.volume:.8f} (≈{pos.volume * price:,.0f}원) — **수동 확인 필요**. "
+                    f"평가액이 최소주문금액({C.MIN_ORDER_KRW:,}원) 미만이면 영구 청산 불가다.")
+            elif pos.exit_failures < C.EXIT_FAIL_ALERT_AFTER:
+                self.notifier.send(
+                    f"⚠️ 청산 실패 {pos.market} ({reason.value}): {res.error or '체결 0'} "
+                    f"— 포지션 유지, {delay:.0f}초 후 재시도")
             return
+
+        pos.exit_failures = 0                  # 체결됐다 → 백오프 해제
+        pos.retry_after = 0.0
+        pos.alerted = False
 
         # 부분 체결 판정. 남은 잔량의 평가액이 최소주문금액 미만이면 '먼지'로 보고 청산 완료 처리
         # (거래 불가능한 잔량으로 매 tick 무한 재청산·로그 스팸 방지).

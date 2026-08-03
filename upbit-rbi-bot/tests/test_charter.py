@@ -124,6 +124,11 @@ def test_대시보드_전략세대_분리():
     (과거 macd/rsi/cvd 기록이 섞이면 승률·손익이 무의미해진다).
     """
     from dashboard.service import BotService
-    clause, params = BotService._scope_clause("current")
+    from types import SimpleNamespace
+
+    # _scope_clause 는 '지금 가동 중인' 전략(런타임 토글 반영)을 본다 → trader 스텁으로 주입
+    svc = SimpleNamespace(trader=SimpleNamespace(
+        strategies={n: None for n in C.ACTIVE_STRATEGIES}))
+    clause, params = BotService._scope_clause(svc, "current")
     assert "strategy IN" in clause and set(params) == set(C.ACTIVE_STRATEGIES)
-    assert BotService._scope_clause("all") == ("", ())
+    assert BotService._scope_clause(svc, "all") == ("", ())
