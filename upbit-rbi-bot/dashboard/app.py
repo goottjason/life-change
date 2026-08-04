@@ -69,6 +69,19 @@ def api_expectations() -> dict:
     return service.expectations()
 
 
+@app.get(PREFIX + "/api/incubation")
+def api_incubation() -> dict:
+    """
+    인큐베이션 진행 리포트 (§11-3) — 백테스트가 실전에서 재현되는지.
+    rsi2 계열은 §11을 통과한 유일한 전략이지만 실전 표본이 아직 한 자릿수다.
+    100거래까지의 진행률·실전 vs 백테스트 대조·실효 슬리피지를 한 번에 본다.
+    """
+    from incubation.progress import report, format_text
+    rep = report()
+    rep["text"] = format_text(rep)
+    return rep
+
+
 @app.get(PREFIX + "/api/roundtrips")
 def api_roundtrips(limit: int = 50, scope: str = "current") -> list[dict]:
     return service.round_trips(min(limit, 200), scope=scope)

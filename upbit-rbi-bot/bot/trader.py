@@ -380,8 +380,10 @@ class Trader:
         )
         self.positions[pos.key] = pos          # '전략:코인' 키 (v1.4)
         self.risk.on_open()
+        # price=신호가(판단에 쓴 종가), fill_price=실제 체결 평단 → 둘의 차이가 실효 슬리피지다.
         self.logger.log("entry", strategy=name, market=market, price=price,
-                        volume=res.filled_volume, size_krw=krw, reason=note)
+                        volume=res.filled_volume, size_krw=krw, reason=note,
+                        fill_price=res.avg_price or price)
 
     def _take_partial(self, pos: Position, price: float) -> None:
         """
@@ -469,7 +471,7 @@ class Trader:
         self.risk.on_close(pnl)                                 # §5 상태 갱신
         self.positions.pop(pos.key, None)
         self.logger.log("exit", strategy=pos.strategy, market=pos.market,
-                        price=fill_price, volume=filled, pnl_krw=pnl,
+                        price=price, volume=filled, pnl_krw=pnl, fill_price=fill_price,
                         reason=f"{reason.value}:{note}" if note else reason.value)
         # 서킷 브레이커 발동 알림
         ok, why = self.risk.can_enter()

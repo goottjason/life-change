@@ -303,10 +303,13 @@ STRATEGY_SPECS: dict[str, StrategySpec] = {
     #            계좌 +32.7% MDD 5.9% (backtesting/research/README.md)
     # 손절/익절은 ATR이 아니라 고정 2.5%다(검증된 값). 레짐 필터는 적용하지 않는다
     # (ADX 필터는 개선 근거가 확인되지 않았고, 검증 시에도 쓰지 않았다).
-    # ⚠ v2.6(테스트) — 변동성 게이트 0.6% → 0.3%. 실매매 매수-매도 왕복을 실제로 관측하려고
-    #   거래를 일부러 늘린 값이다. 백테스트로 검증한 값이 아니다. 테스트가 끝나면 0.006 으로 되돌린다.
+    # v2.9 — 변동성 게이트를 **검증값 0.6% 로 되돌렸다**. v2.6에서 왕복 체결을 관측하려고
+    #   0.3%로 낮춰 뒀는데, 그 값은 백테스트에서 **거래당 −0.050%(음수)** 인 지점이다:
+    #       게이트 0.30% → −0.050% · 0.50% → +0.142% · 0.60% → +0.199% · 0.70% → +0.206%
+    #   관측 목적은 달성됐고(실전 왕복 체결 확보), 이제부터는 §11-3 인큐베이션 표본을 쌓는
+    #   단계다. 검증되지 않은 값으로 표본을 모으면 '다른 전략'의 실적을 모으는 셈이 된다.
     "rsi2": StrategySpec("rsi2", atr_stop_mult=0.0, rr=1.0, regime=Regime.RANGE,
-                         stop_pct=0.025, min_atr_ratio=0.003, time_stop_bars=96,
+                         stop_pct=0.025, min_atr_ratio=0.006, time_stop_bars=96,
                          use_dead_extras=False, always_active=True,
                          timeframe="minute5"),
     # rsi2_15m (v1.4) — 같은 신호를 15분봉에 적용. 15분봉은 '한 봉 평균 움직임 0.323% vs
@@ -322,10 +325,10 @@ STRATEGY_SPECS: dict[str, StrategySpec] = {
     # ⚠ 통계적으로 입증된 값은 아니다 — walk-forward t=+1.08(입증에는 표본 약 8.5배 필요)이고
     #   양의 결과가 특정 한 폴드에 상당히 의존한다. '측정된 최선'일 뿐이다(헌장 §2 개정 주석).
     #
-    # ⚠ v2.6(테스트) — 게이트 0.83% → 0.4%. 위와 같은 이유(왕복 체결 관측)로 낮춘 값이며
-    #   검증되지 않았다. walk-forward가 고른 값은 0.0083 이다 — 테스트 후 되돌린다.
+    # v2.9 — 게이트를 walk-forward 가 고른 값 **0.83% 로 되돌렸다**(v2.6에서 0.4%로 낮춰 둠).
+    #   이유는 rsi2 와 같다: 관측 목적 달성 + 인큐베이션 표본은 검증된 설정으로 모아야 한다.
     "rsi2_15m": StrategySpec("rsi2_15m", atr_stop_mult=0.0, rr=1.0, regime=Regime.RANGE,
-                             stop_pct=0.030, min_atr_ratio=0.004, time_stop_bars=32,
+                             stop_pct=0.030, min_atr_ratio=0.0083, time_stop_bars=32,
                              use_dead_extras=False, always_active=True,
                              timeframe="minute15", entry_level=7.0),
     # easy_teaching (v2.7 재설계) — 청산을 원문(docs/strategies/easy-teaching-man)대로 되돌렸다.
