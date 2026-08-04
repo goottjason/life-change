@@ -178,10 +178,36 @@ def test_제외된_이전_거래가_있으면_이유를_설명한다(tmp_path):
     rep = P.report(make_db(tmp_path, _many(3, 100.0)),
                    since="2026-08-05T00:00:00+09:00")
     notes = " ".join(rep["notes"])
-    assert "세지 않습니다" in notes and "조건이 다른" in notes
+    assert "세지 않습니다" in notes and "진입한" in notes
 
 
 def test_기본값은_헌장의_기준일을_쓴다(tmp_path):
     from config import charter as C
     rep = P.report(make_db(tmp_path, _many(2, 100.0)))
     assert rep["since"] == C.INCUBATION_START
+
+
+def test_기준시각은_청산이_아니라_진입_시각으로_거른다(tmp_path):
+    """
+    ★ 실제로 났던 오류 — 옛 설정으로 사서 새 설정 배포 뒤에 팔린 거래가 표본에 섞였다
+    (2026-08-04 AVAX: 진입 15:41 옛 게이트 0.4% → 청산 16:33 복구 배포 후).
+    판정 대상은 '어떤 설정으로 샀는가'이지 '언제 팔렸는가'가 아니다.
+    """
+    db = tmp_path / "x.sqlite"
+    con = sqlite3.connect(db)
+    con.execute("CREATE TABLE trades (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT,"
+                " event TEXT, strategy TEXT, market TEXT, price REAL, volume REAL,"
+                " size_krw REAL, pnl_krw REAL, reason TEXT, fill_price REAL)")
+    ins = ("INSERT INTO trades (ts,event,strategy,market,price,volume,size_krw,pnl_krw,"
+           "reason,fill_price) VALUES (?,?,?,?,100,0,?,?,'',0)")
+    con.execute(ins, ("2026-08-04T15:41:00+09:00","entry","rsi2_15m","KRW-AVAX",30000,0))
+    con.execute(ins, ("2026-08-04T16:33:00+09:00","exit","rsi2_15m","KRW-AVAX",0,-46))
+    con.execute(ins, ("2026-08-04T17:00:00+09:00","entry","rsi2","KRW-BTC",30000,0))
+    con.execute(ins, ("2026-08-04T18:00:00+09:00","exit","rsi2","KRW-BTC",0,50))
+    con.commit(); con.close()
+
+    rep = P.report(str(db), since="2026-08-04T16:15:00+09:00")
+    assert rep["overall"]["n"] == 1, "옛 설정으로 산 거래가 표본에 섞였다"
+    assert rep["per_strategy"]["rsi2"]["n"] == 1
+    assert "rsi2_15m" not in rep["per_strategy"]
+    assert rep["excluded_prior"] == 1

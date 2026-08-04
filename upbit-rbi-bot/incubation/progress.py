@@ -42,6 +42,7 @@ EXP_FLOOR_RATIO = 0.0        # 실전 거래당 기댓값이 이 값 미만이�
 class Roundtrip:
     strategy: str
     market: str
+    entry_ts: str
     exit_ts: str
     pnl_krw: float
     size_krw: float
@@ -71,13 +72,10 @@ def load_roundtrips(db_path: str | None = None,
         fill = "fill_price" if _has_col(con, "fill_price") else "NULL"
         rows = con.execute(
             f"SELECT id, ts, strategy, market, price, {fill}, pnl_krw, reason, size_krw"
-            " FROM trades WHERE event='exit' AND strategy IN (%s)"
-            % ",".join("?" * len(strategies)) +
-            (" AND ts >= ?" if since else "") + " ORDER BY id",
-            (*strategies, *( (since,) if since else () )),
-        ).fetchall()
+            " FROM trades WHERE event='exit' AND strategy IN (%s) ORDER BY id"
+            % ",".join("?" * len(strategies)), strategies).fetchall()
         entries = con.execute(
-            f"SELECT id, strategy, market, size_krw, price, {fill} FROM trades"
+            f"SELECT id, strategy, market, size_krw, price, {fill}, ts FROM trades"
             " WHERE event='entry' ORDER BY id").fetchall()
     except sqlite3.Error:
         return []
@@ -91,8 +89,15 @@ def load_roundtrips(db_path: str | None = None,
     for eid, ts, strat, market, px, fpx, pnl, reason, size in rows:
         prior = [e for e in entries if e[1] == strat and e[2] == market and e[0] < eid]
         entry = prior[-1] if prior else None
+        entry_ts = (entry[6] if entry else "") or ""
+        # ★ 기준 시각은 **진입 시각**으로 거른다. 청산 시각으로 자르면 '옛 설정으로 사서
+        #   새 설정 배포 후에 팔린' 거래가 표본에 섞인다 — 2026-08-04 AVAX 가 그랬다
+        #   (진입 15:41 옛 게이트 0.4% → 청산 16:33 복구 배포 후).
+        #   판정 대상은 '어떤 설정으로 샀는가'이지 '언제 팔렸는가'가 아니다.
+        if since and (not entry_ts or entry_ts < since):
+            continue
         out.append(Roundtrip(
-            strategy=strat, market=market, exit_ts=ts, pnl_krw=pnl or 0.0,
+            strategy=strat, market=market, entry_ts=entry_ts, exit_ts=ts, pnl_krw=pnl or 0.0,
             size_krw=(size or 0.0) or (entry[3] if entry else 0.0),
             reason=reason or "",
             signal_price=(entry[4] if entry else 0.0) or 0.0,
@@ -176,8 +181,8 @@ def report(db_path: str | None = None, since: str | None = None) -> dict:
     head, notes = verdict(overall, per)
     prior = len(all_trips) - len(trips)
     if prior:
-        notes.append(f"ℹ️ 기준일({start[:10]}) 이전 {prior}건은 세지 않습니다 — 변동성 게이트가 "
-                     f"미검증 값이었고 전략 귀속도 어긋나 있었습니다(조건이 다른 거래).")
+        notes.append(f"ℹ️ 기준 시각({start[:16].replace('T',' ')}) **이전에 진입한** {prior}건은 "
+                     f"세지 않습니다 — 검증되지 않은 설정으로 산 거래라 조건이 다릅니다.")
     return {"verdict": head, "notes": notes, "overall": overall, "per_strategy": per,
             "target": TARGET_TRADES, "backtest": BACKTEST, "since": start,
             "excluded_prior": prior}
