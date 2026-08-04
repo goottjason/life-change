@@ -2,7 +2,9 @@
 rsi2 전략(헌장 v1.3) 단위 테스트 — 백테스트로 검증된 규칙이 코드에 그대로 들어갔는지 확인.
 
 검증 규칙(5분봉): RSI(2)≤3 AND 1시간봉 EMA200 위 AND ATR/가격≥0.6% → 진입 / RSI(2)≥70 → 청산
-v2.3: 진입선과 변동성 게이트는 **전략 스펙**에서 읽는다 — 15분봉은 RSI(2)≤7 · ATR≥0.83%.
+진입선과 변동성 게이트는 **전략 스펙**에서 읽는다(모듈 상수 공유 금지).
+v3.0: 15분봉의 v2.3 개정(진입 7·게이트 0.83%)은 2년 재측정에서 악화로 확인돼 취소했다
+      → 두 전략 모두 진입선 3, 게이트는 5분 0.6% / 15분 1.0%.
 """
 from __future__ import annotations
 
@@ -135,23 +137,31 @@ def test_ctx_없어도_장기캔들이면_자체계산(strat):
 
 
 # ── v2.3: 진입선을 스펙에서 읽는다 (5분봉 3 / 15분봉 7) ──────
-def test_진입선은_스펙에서_읽는다():
+def test_진입선은_모듈상수가_아니라_스펙에서_읽는다():
     """
-    같은 캔들(RSI2≈5.8)에서 5분봉은 보류하고 15분봉은 진입해야 한다.
+    ★ 회귀 방지 — 진입선은 v2.2까지 `rsi2_pullback.ENTRY_LEVEL` 모듈 상수를 두 전략이
+    공유했다. 리팩터링으로 다시 공유 상수로 합쳐지면 스펙을 고쳐도 반영되지 않는다.
 
-    모듈 상수(ENTRY_LEVEL)를 쓰면 두 전략이 같은 판정을 내므로 이 테스트가 깨진다 —
-    즉 이 테스트가 '진입선이 스펙에서 온다'는 사실을 지킨다.
+    v3.0부터 두 전략의 진입선이 **같은 값(3.0)** 이라, '값이 다르다'로는 이 회귀를 잡을 수
+    없다. 그래서 임의의 진입선을 가진 스펙을 만들어 **동작이 따라오는지**로 검증한다.
     """
+    from dataclasses import replace
     df = mild_dip_df()
     rsi2 = Rsi2PullbackStrategy(SPEC).signal(df, {"trend_up": True}).meta["rsi2"]
-    assert 3.0 < rsi2 < 7.0, f"테스트 캔들의 RSI2({rsi2})가 두 진입선 사이가 아니다"
+    assert 3.0 < rsi2 < 7.0, f"테스트 캔들의 RSI2({rsi2})가 3~7 사이가 아니다"
 
-    five = Rsi2PullbackStrategy(SPEC).signal(df, {"trend_up": True})
-    assert five.action == Action.HOLD
-    assert "진입선 3" in five.reason
+    낮은선 = replace(SPEC, entry_level=3.0)
+    높은선 = replace(SPEC, entry_level=7.0)
+    a = Rsi2PullbackStrategy(낮은선).signal(df, {"trend_up": True})
+    b = Rsi2PullbackStrategy(높은선).signal(df, {"trend_up": True})
+    assert a.action == Action.HOLD and "진입선 3" in a.reason
+    assert b.action == Action.ENTER_LONG, "스펙의 진입선이 동작에 반영되지 않는다(모듈 상수 의심)"
 
-    fifteen = Rsi2PullbackStrategy(SPEC_15M).signal(df, {"trend_up": True})
-    assert fifteen.action == Action.ENTER_LONG
+    # 게이트도 같은 방식으로 스펙에서 온다
+    느슨 = replace(SPEC, entry_level=7.0, min_atr_ratio=0.001)
+    빡빡 = replace(SPEC, entry_level=7.0, min_atr_ratio=0.99)
+    assert Rsi2PullbackStrategy(느슨).signal(df, {"trend_up": True}).action == Action.ENTER_LONG
+    assert Rsi2PullbackStrategy(빡빡).signal(df, {"trend_up": True}).action == Action.HOLD
 
 
 def test_진입선을_meta로_노출한다():
@@ -159,24 +169,29 @@ def test_진입선을_meta로_노출한다():
     df = dumping_df()
     assert Rsi2PullbackStrategy(SPEC).signal(df, {"trend_up": True}).meta["entry"] == 3.0
     m15 = Rsi2PullbackStrategy(SPEC_15M).signal(df, {"trend_up": True}).meta
-    assert m15["entry"] == 7.0 and m15["gate"] == 0.0083   # walk-forward 선택값
+    assert m15["entry"] == 3.0 and m15["gate"] == 0.010    # v3.0 개정 취소 후 복원값
 
 
 def test_15분봉_진입선_초과는_보류():
-    """15분봉도 진입선(7)을 넘으면 보류한다 — 게이트만 느슨해진 게 아님을 확인."""
+    """15분봉도 진입선(3)을 넘으면 보류한다 — 게이트만 보는 게 아님을 확인."""
     df = mild_dip_df(bounce=0.001)          # RSI2 ≈ 19.9
     sig = Rsi2PullbackStrategy(SPEC_15M).signal(df, {"trend_up": True})
     assert sig.action == Action.HOLD
-    assert "진입선 7" in sig.reason
+    assert "진입선 3" in sig.reason
 
 
-def test_15분봉_변동성_게이트_위에서는_진입():
-    """게이트(v2.6 테스트값 0.4%) 위 변동성(0.83%~1.0%)에서 15분봉은 진입한다."""
-    strat = Rsi2PullbackStrategy(SPEC_15M)
-    sig = strat.signal(dumping_df(drop_per_bar=0.004, band=0.009), {"trend_up": True})
-    assert sig.meta["atr_pct"] is not None
-    assert 0.83 <= sig.meta["atr_pct"] < 1.0, sig.meta["atr_pct"]
-    assert sig.action == Action.ENTER_LONG      # 옛 게이트(1.0%)라면 막혔을 구간
+def test_15분봉_게이트는_5분봉보다_높다():
+    """
+    15분봉은 한 봉 움직임이 커서 게이트도 높다(5분 0.6% vs 15분 1.0%).
+    같은 캔들(ATR≈0.83%)에서 5분봉은 통과하고 15분봉은 막혀야 한다.
+    v2.3에서 15분 게이트를 0.83%로 낮췄던 것을 v3.0에서 취소했으므로, 이 구간은 다시 막힌다.
+    """
+    df = dumping_df(drop_per_bar=0.004, band=0.009)
+    five = Rsi2PullbackStrategy(SPEC).signal(df, {"trend_up": True})
+    fifteen = Rsi2PullbackStrategy(SPEC_15M).signal(df, {"trend_up": True})
+    assert 0.6 <= five.meta["atr_pct"] < 1.0, five.meta["atr_pct"]
+    assert five.action == Action.ENTER_LONG
+    assert fifteen.action == Action.HOLD and "변동성 부족" in fifteen.reason
 
 
 # ── 스펙(헌장 값)이 검증된 설정과 일치하는지 ─────────────────

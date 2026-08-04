@@ -325,12 +325,19 @@ STRATEGY_SPECS: dict[str, StrategySpec] = {
     # ⚠ 통계적으로 입증된 값은 아니다 — walk-forward t=+1.08(입증에는 표본 약 8.5배 필요)이고
     #   양의 결과가 특정 한 폴드에 상당히 의존한다. '측정된 최선'일 뿐이다(헌장 §2 개정 주석).
     #
-    # v2.9 — 게이트를 walk-forward 가 고른 값 **0.83% 로 되돌렸다**(v2.6에서 0.4%로 낮춰 둠).
-    #   이유는 rsi2 와 같다: 관측 목적 달성 + 인큐베이션 표본은 검증된 설정으로 모아야 한다.
+    # v3.0 — **v2.3 개정을 취소하고 개정 전 값(진입선 3 · 게이트 1.0%)으로 되돌렸다.**
+    #   v2.3은 209일 '선택구간'에서 고른 값이고, 당시 주석 스스로 "통계적으로 입증된 값이
+    #   아니다 — walk-forward t=+1.08, 양수가 특정 한 폴드에 상당히 의존한다"고 경고했다.
+    #   2년 전체로 재측정하니 그 우려가 그대로 확인됐다(lab_exit_timing.py, 비용=수수료+실측 스프레드):
+    #       개정 전 진입3·게이트1.00% : 저스프레드 6종목 +0.457%(t+3.58) · 전체 +0.243%(t+3.65)
+    #       v2.3   진입7·게이트0.83% : 저스프레드 6종목 +0.130%(t+2.16) · 전체 **−0.026%(t−0.82)**
+    #   개정 전이 모든 조합에서 낫고 v2.3 값은 전체 종목에서 음수다.
+    #   ⚠ 이것은 '결과를 보고 새로 고른 것'이 아니라 **입증되지 않은 변경의 취소**다.
+    #     되돌린 값은 원래 2년·홀드아웃으로 검증된 값이다(§11 통과 근거).
     "rsi2_15m": StrategySpec("rsi2_15m", atr_stop_mult=0.0, rr=1.0, regime=Regime.RANGE,
-                             stop_pct=0.030, min_atr_ratio=0.0083, time_stop_bars=32,
+                             stop_pct=0.030, min_atr_ratio=0.010, time_stop_bars=32,
                              use_dead_extras=False, always_active=True,
-                             timeframe="minute15", entry_level=7.0),
+                             timeframe="minute15", entry_level=3.0),
     # easy_teaching (v2.7 재설계) — 청산을 원문(docs/strategies/easy-teaching-man)대로 되돌렸다.
     # 실매매 실패의 1차 원인은 신호가 아니라 청산 설계였다(ACTIVE_STRATEGIES 주석 참조):
     #   ① 손절 = 오더블록 생성 캔들의 저점(구조적 무효화 지점). ATR 배수·1% 하한이 아니다.
