@@ -78,7 +78,17 @@ def run_market(market: str, df: pd.DataFrame, bars: int | None = None) -> list[d
     """
     strat = EasyTeachingStrategy(SPEC)
     up = trend_htf(df)
+    # 멀티 타임프레임 겹침(강의): 상위 봉의 오더블록 구간을 미리 계산해 ctx 로 넘긴다.
+    # 각 시점에서 '그때까지 확정된' 상위봉 오더블록만 보이게 해야 미래참조가 없다.
+    htf_zones: list[tuple] = []
+    if SPEC.require_mtf_overlap:
+        hdf = df.resample(HTF.get(TF, "1h")).agg(
+            {"open": "first", "high": "max", "low": "min",
+             "close": "last", "volume": "sum"}).dropna()
+        for z in strat._find_order_blocks(hdf):
+            htf_zones.append((hdf.index[z.formed_at], z.bottom, z.top))
     o, h, l = df["open"].to_numpy(), df["high"].to_numpy(), df["low"].to_numpy()
+    cl = df["close"].to_numpy()
     n = len(df)
     start = WARM
     end = n if bars is None else min(n, WARM + bars)
@@ -92,8 +102,17 @@ def run_market(market: str, df: pd.DataFrame, bars: int | None = None) -> list[d
             held = i - pos["bar"]
             stop = pos["entry"] if pos["half"] else pos["stop"]
             exit_px, why = None, ""
-            if l[i] <= stop:                                  # 손절(구조 or 본절)
-                exit_px, why = stop, "stop_loss" if not pos["half"] else "breakeven"
+            # 손절 판정 기준 (강의): 기본은 꼬리 끝 터치 즉시(저가), stop_on_close 면
+            # **손절선 아래로 봉마감**해야 손절한다. 원저자는 후자가 "승률이 확실히 높다"고
+            # 명시한다 — 꼬리로 스치고 되돌아오는 케이스를 살려주기 때문이다.
+            if SPEC.stop_on_close:
+                hit_stop = cl[i] <= stop
+                fill = cl[i]              # 마감 후 청산이므로 종가 체결(보수적)
+            else:
+                hit_stop = l[i] <= stop
+                fill = stop
+            if hit_stop:
+                exit_px, why = fill, "stop_loss" if not pos["half"] else "breakeven"
             elif not pos["half"] and h[i] >= pos["target"]:    # 반익절 — 절반만
                 pos["half"] = True
                 pos["parts"].append((pos["target"], SPEC.partial_tp_ratio))
@@ -110,12 +129,21 @@ def run_market(market: str, df: pd.DataFrame, bars: int | None = None) -> list[d
         if pos is not None or i + 1 >= n:
             continue
         # 라이브와 동일: df 의 마지막 봉은 '미완성' 취급되므로 i+1 까지 넘긴다
-        sig = strat.signal(df.iloc[max(0, i - 400): i + 2], {"trend_up": bool(up[i])})
+        ctx = {"trend_up": bool(up[i])}
+        if SPEC.require_mtf_overlap:
+            now = df.index[i]
+            ctx["htf_obs"] = [(b, t) for ts, b, t in htf_zones if ts <= now]
+        sig = strat.signal(df.iloc[max(0, i - 400): i + 2], ctx)
         if sig.action != Action.ENTER_LONG:
             continue
         entry = o[i + 1]                                      # 다음 봉 시가 체결(보수적)
-        if not C.entry_rr_ok(entry, sig.stop_price, sig.target_price):
-            continue                                          # 손익비 게이트(§7, v2.7)
+        # 손익비 게이트 — 강의는 "손익비 1:1 고정은 핸디캡, 필수가 아니라 권장"이라며
+        # 명시적으로 경계한다("손익비의 함정"). 그래서 켜고 끌 수 있는 축으로 둔다.
+        if SPEC.use_rr_gate:
+            if not C.entry_rr_ok(entry, sig.stop_price, sig.target_price):
+                continue
+        elif not (sig.stop_price < entry < sig.target_price):
+            continue                                          # 기하가 성립하지 않는 자리만 배제
         pos = {"entry": entry, "stop": sig.stop_price, "target": sig.target_price,
                "bar": i + 1, "half": False, "parts": []}
     return trades

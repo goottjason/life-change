@@ -89,6 +89,13 @@ class EasyTeachingStrategy(BaseStrategy):
                   & (cl[1:] > o[1:])            # 현재 양봉
                   & (cl[1:] >= o[:-1])          # 몸통 상단을 덮고
                   & (o[1:] <= cl[:-1]))         # 몸통 하단도 덮는다
+        # 신뢰도 필터 (강의): "각 캔들의 몸통 크기가 2배 이상 차이 날 경우 신뢰할 만한
+        # 오더블록으로 식별된다." 감싸는 양봉이 감싸인 음봉보다 그만큼 커야 한다.
+        mult = self.spec.min_ob_body_mult
+        if mult > 0:
+            prev_body = np.abs(o[:-1] - cl[:-1])
+            curr_body = np.abs(cl[1:] - o[1:])
+            engulf &= curr_body >= prev_body * mult
         return [Zone(kind="ob",
                      bottom=float(cl[i - 1]),   # 음봉이므로 close 가 몸통 하단
                      top=float(o[i - 1]),
@@ -274,6 +281,16 @@ class EasyTeachingStrategy(BaseStrategy):
         bottom, top, zone_low, formed_at = best.bottom, best.top, best.low, best.formed_at
         meta["ob"] = meta["fvg"] = True
         meta["confluence"] = 2
+
+        # 멀티 타임프레임 겹침 (강의): 상위 봉의 오더블록과 겹치는 자리만 인정한다.
+        if self.spec.require_mtf_overlap:
+            htf = (ctx or {}).get("htf_obs") or []
+            if not any(hb <= top and ht >= bottom for hb, ht in htf):
+                meta["mtf"] = False
+                return Signal(Action.HOLD, self.name,
+                              reason="근거 중첩, 상위봉 오더블록과 겹치지 않음", meta=meta)
+            meta["mtf"] = True
+            meta["confluence"] = 3
 
         # 반등 확인: 확인봉이 겹침 구간을 건드리고 **양봉으로**, 구간 하단 위에서 마감해야 한다.
         # (존에 닿는 즉시 진입하면 떨어지는 칼을 받는다 — 실매매에서 확인된 실패 원인)

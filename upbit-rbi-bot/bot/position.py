@@ -138,6 +138,9 @@ class Position:
         """
         stop = self.effective_stop_price
         if stop is not None:
+            # 강의(원저자, 2025.09): "손절은 복마감(봉마감)을 보고 한다."
+            # 라이브에서 price 는 해당 전략 타임프레임의 마지막 종가이므로 이 비교가 곧
+            # 종가 기준 판정이다. 백테스트도 같은 기준을 쓴다(spec.stop_on_close).
             if price <= stop:
                 return ExitReason.STOP_LOSS
             if self.target_price is not None and price >= self.target_price:
