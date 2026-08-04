@@ -2,550 +2,411 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LIFE CHANGE — 업비트 자동매매 현황</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>내 자동매매 봇</title>
 <style>
+  /* ── 설계 원칙 ─────────────────────────────────────────────
+     이 화면을 보는 사람은 트레이딩 초보자다. 그래서:
+       1) 숫자보다 '지금 어떤 상태인가'를 문장으로 먼저 말한다
+       2) 모든 지표 옆에 '이게 무슨 뜻인지'를 붙인다
+       3) 전문용어(PF·t값·슬리피지)는 쓰되 반드시 쉬운 말을 같이 적는다
+       4) 휴대폰에서 먼저 본다고 가정한다
+     ───────────────────────────────────────────────────────── */
   :root{
-    --bg:#0b0e14; --panel:#151a23; --panel2:#1c2230; --line:#232b3a;
-    --txt:#e6edf3; --muted:#8b98a9; --accent:#5b8cff;
-    --up:#2ec26b; --down:#ff5c6c; --warn:#ffb020; --halt:#ff4d4f;
+    --bg:#0f1216; --card:#171c23; --card2:#1e242d; --line:#2a323d;
+    --tx:#e8edf4; --tx2:#9aa7b8; --tx3:#6b7889;
+    --up:#22c55e; --down:#ef4444; --info:#3b82f6; --r:16px;
   }
-  /* 라이트 테마 (A) — data-theme="light" 시 변수 오버라이드 */
-  :root[data-theme="light"]{
-    --bg:#f5f7fb; --panel:#ffffff; --panel2:#eef2f8; --line:#dfe5ee;
-    --txt:#1a2230; --muted:#5f6b7d; --accent:#2f6bff;
-    --up:#0f9d58; --down:#e23b47; --warn:#b8770a; --halt:#d93438;
+  @media (prefers-color-scheme: light){
+    :root{ --bg:#f4f6f9; --card:#fff; --card2:#f7f9fc; --line:#e3e8ef;
+           --tx:#131820; --tx2:#5b6675; --tx3:#8b96a5; }
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--txt);
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
-    font-size:14px;line-height:1.5}
-  .wrap{max-width:1200px;margin:0 auto;padding:20px 16px 60px}
-  header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:6px}
-  h1{font-size:19px;margin:0;font-weight:700;letter-spacing:.2px}
-  h1 span{color:var(--accent)}
-  .badge{padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700}
-  .badge.live{background:rgba(46,194,107,.15);color:var(--up);border:1px solid rgba(46,194,107,.4)}
-  .badge.dry{background:rgba(139,152,169,.15);color:var(--muted);border:1px solid var(--line)}
-  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
-  .dot.on{background:var(--up);box-shadow:0 0 8px var(--up)}
-  .dot.off{background:var(--down)}
-  .sub{color:var(--muted);font-size:12px;margin:2px 0 18px}
-  .halt-banner{background:rgba(255,77,79,.12);border:1px solid var(--halt);color:#ff8f90;
-    padding:10px 14px;border-radius:10px;margin-bottom:16px;font-weight:600;display:none}
-  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
-  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
-  .kpi .label{color:var(--muted);font-size:12px;margin-bottom:6px}
-  .kpi .val{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
-  .kpi .val.small{font-size:16px}
-  .grid{display:grid;grid-template-columns:1fr;gap:16px}
-  @media(min-width:820px){.grid.two{grid-template-columns:1.4fr 1fr}}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
-  .card h2{font-size:13px;margin:0;padding:12px 16px;border-bottom:1px solid var(--line);
-    color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;
-    display:flex;justify-content:space-between;align-items:center}
-  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
-  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
-  th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase}
+  body{margin:0;background:var(--bg);color:var(--tx);
+       font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",Pretendard,
+                   "Malgun Gothic",system-ui,sans-serif;
+       line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:760px;margin:0 auto;padding:20px 16px 60px}
+  h1{font-size:20px;margin:0 0 4px}
+  .sub{color:var(--tx3);font-size:13px;margin-bottom:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+        padding:20px;margin-bottom:14px}
+  .card h2{font-size:15px;margin:0 0 6px}
+  .hint{color:var(--tx3);font-size:12.5px;margin:0 0 16px;line-height:1.55}
+  .up{color:var(--up)} .down{color:var(--down)} .muted{color:var(--tx2)}
+  .banner{border-radius:var(--r);padding:22px 20px;margin-bottom:14px;
+          border:1px solid var(--line);background:var(--card)}
+  .banner .state{font-size:22px;font-weight:700;margin-bottom:6px}
+  .banner .why{color:var(--tx2);font-size:14px}
+  .banner.ok{border-color:#1c7a45;background:linear-gradient(180deg,#12291d,var(--card))}
+  .banner.warn{border-color:#8a6516;background:linear-gradient(180deg,#2a2113,var(--card))}
+  .banner.bad{border-color:#8f2b2b;background:linear-gradient(180deg,#2a1515,var(--card))}
+  @media (prefers-color-scheme: light){
+    .banner.ok{background:linear-gradient(180deg,#e8f8ee,#fff);border-color:#8fd6ab}
+    .banner.warn{background:linear-gradient(180deg,#fdf3e0,#fff);border-color:#e9c078}
+    .banner.bad{background:linear-gradient(180deg,#fdeaea,#fff);border-color:#eda1a1}
+  }
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:12px}
+  .kv{background:var(--card2);border-radius:12px;padding:14px}
+  .kv .k{font-size:12px;color:var(--tx3);margin-bottom:4px}
+  .kv .v{font-size:19px;font-weight:650}
+  .kv .n{font-size:11.5px;color:var(--tx3);margin-top:3px;line-height:1.4}
+  .bar{height:12px;border-radius:99px;background:var(--card2);overflow:hidden;margin:10px 0 6px}
+  .bar>i{display:block;height:100%;border-radius:99px;transition:width .4s;
+         background:linear-gradient(90deg,#3b82f6,#22c55e)}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{padding:10px 6px;text-align:right;border-bottom:1px solid var(--line);vertical-align:top}
+  th:first-child,td:first-child{text-align:left}
+  th{color:var(--tx3);font-weight:600;font-size:12px}
   tbody tr:last-child td{border-bottom:none}
-  td.pos{color:var(--up)} td.neg{color:var(--down)}
-  .chip{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;
-    background:var(--panel2);color:var(--muted);border:1px solid var(--line)}
-  .chip.trend{color:var(--accent)} .chip.range{color:var(--warn)} .chip.reversal{color:#c07bff}
-  .empty{padding:24px 16px;color:var(--muted);text-align:center;font-size:13px}
-  .foot{margin-top:26px;color:var(--muted);font-size:11px;line-height:1.7;border-top:1px solid var(--line);padding-top:14px}
-  .kill{background:transparent;border:1px solid var(--halt);color:var(--halt);border-radius:8px;
-    padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer}
-  .kill:hover{background:rgba(255,77,79,.12)}
-  .theme-btn{background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:8px;
-    padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer}
-  .theme-btn:hover{border-color:var(--accent);color:var(--accent)}
-  .scroll{overflow-x:auto}
-  .row-strats{display:flex;gap:8px;flex-wrap:wrap;padding:12px 16px}
-  .strat{flex:1;min-width:130px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
-  .strat .n{font-weight:700;text-transform:uppercase;font-size:12px;margin-bottom:4px}
-  .strat .m{color:var(--muted);font-size:12px}
+  .box{background:var(--card2);border-radius:12px;padding:16px;margin-bottom:10px}
+  .box .top{display:flex;justify-content:space-between;align-items:baseline;
+            gap:10px;margin-bottom:8px}
+  .sym{font-size:17px;font-weight:700}
+  .tag{font-size:11px;color:var(--tx3);background:var(--card);padding:3px 8px;
+       border-radius:99px;margin-left:6px}
+  .cond{display:flex;gap:9px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+  .cond:last-child{border-bottom:none}
+  .cond .mk{flex:0 0 20px}
+  .cond small{display:block;color:var(--tx3);font-size:12px}
+  .gauge{position:relative;height:8px;background:var(--card);border-radius:99px;margin:14px 0 6px}
+  .gauge .zone{position:absolute;height:100%;border-radius:99px;opacity:.3}
+  .gauge .now{position:absolute;top:-4px;width:3px;height:16px;background:var(--tx);
+              border-radius:2px;transform:translateX(-50%)}
+  .gscale{display:flex;justify-content:space-between;font-size:11px;color:var(--tx3)}
+  details{border-top:1px solid var(--line)}
+  details:first-of-type{border-top:none}
+  summary{cursor:pointer;font-size:14px;padding:11px 0;list-style:none;font-weight:600}
+  summary::-webkit-details-marker{display:none}
+  summary::before{content:"＋ ";color:var(--info)}
+  details[open] summary::before{content:"− ";color:var(--info)}
+  .doc{font-size:13.5px;color:var(--tx2);line-height:1.75;padding-bottom:10px}
+  .doc b{color:var(--tx)}
+  .doc ol,.doc ul{padding-left:20px;margin:8px 0}
+  .doc li{margin:6px 0}
+  .empty{color:var(--tx3);font-size:13.5px;text-align:center;padding:22px 0;line-height:1.7}
+  .foot{text-align:center;color:var(--tx3);font-size:12px;margin-top:24px}
+  button{font:inherit;background:var(--card2);color:var(--tx2);border:1px solid var(--line);
+         border-radius:10px;padding:10px 15px;cursor:pointer}
+  .danger{color:#fff;background:#b91c1c;border-color:#b91c1c}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <h1><span>LIFE&nbsp;CHANGE</span> · 업비트 자동매매 현황</h1>
-    <span id="mode" class="badge dry">—</span>
-    <span style="color:var(--muted);font-size:12px"><span id="dot" class="dot off"></span><span id="running">연결 중…</span></span>
-    <button class="theme-btn" id="themeBtn" onclick="toggleTheme()" style="margin-left:auto" title="라이트/다크 전환">🌙 다크</button>
-    <button class="kill" onclick="doKill()">🛑 KILL</button>
-  </header>
-  <div class="sub" id="meta">—</div>
+  <h1>내 자동매매 봇</h1>
+  <div class="sub" id="updated">불러오는 중…</div>
 
-  <div class="halt-banner" id="halt"></div>
-
-  <div class="card" style="margin-bottom:16px">
-    <h2>전략 선택 (Strategy Selector) <span class="chip">실시간 ON/OFF</span></h2>
-    <div class="row-strats" id="strategySelector" style="padding:12px 16px">
-      <span class="empty">로딩 중...</span>
-    </div>
+  <div class="banner" id="banner">
+    <div class="state" id="bstate">불러오는 중…</div>
+    <div class="why" id="bwhy"></div>
   </div>
 
-  <div class="kpis" id="kpis"></div>
-
-  <div class="grid two">
-    <div class="card">
-      <h2>오픈 포지션 <span id="posn" class="chip">0</span></h2>
-      <div class="scroll"><table id="postbl">
-        <thead><tr><th>전략</th><th>마켓</th><th>진입가</th><th>현재가</th><th>손익</th><th>손익%</th><th>SL/TP</th></tr></thead>
-        <tbody></tbody>
-      </table></div>
-      <div class="empty" id="posempty">보유 포지션 없음</div>
-    </div>
-    <div class="card">
-      <h2>전략별 성과 <span class="chip" id="scopeChip">현재 전략</span>
-        <button class="theme-btn" id="scopeBtn" onclick="toggleScope()" style="float:right;font-size:11px">과거 기록 보기</button>
-      </h2>
-      <div class="row-strats" id="strats"><div class="empty">데이터 없음</div></div>
-      <h2 style="border-top:1px solid var(--line)">백테스트 기대치 (대조용)</h2>
-      <div class="row-strats" id="expect"><div class="empty">—</div></div>
-    </div>
+  <div class="card">
+    <h2>💰 내 돈</h2>
+    <p class="hint">봇이 굴리는 계좌입니다. 평가액은 <b>원화 + 보유 코인을 지금 값으로 친 것</b>입니다.</p>
+    <div class="grid" id="money"></div>
   </div>
 
-  <div class="card" style="margin-top:16px">
-    <h2>진입 진단 — 지금 왜 사지 않는가 <span class="chip">조건 충족 시에만 매수</span></h2>
-    <div class="scroll"><table id="sigtbl">
-      <thead><tr><th>마켓</th><th>전략(봉)</th><th>지표 1</th><th>지표 2</th><th>지표 3</th><th>상태</th></tr></thead>
-      <tbody></tbody>
-    </table></div>
-    <div class="empty" id="sigempty">신호 진단 대기 중 (첫 tick 이후 표시)</div>
+  <div class="card">
+    <h2>🧪 이 전략이 진짜인지 확인하는 중</h2>
+    <p class="hint">
+      과거 2년 데이터에서는 잘 통했습니다. 그런데 <b>실제 돈으로도 그런지는 따로 확인해야</b> 합니다.
+      거래 <b>100건</b>이 쌓이면 처음으로 "진짜다/아니다"를 말할 수 있습니다.
+      그 전에 나오는 승률·수익률은 <b>운일 수 있어서 판정하지 않습니다.</b>
+    </p>
+    <div id="incu"></div>
   </div>
 
-  <div class="card" style="margin-top:16px">
-    <h2>유니버스 / 호가 스프레드 <span class="chip">스프레드 ≤0.10% · 상장 1년+ 만 거래</span></h2>
-    <div class="scroll"><table id="unitbl">
-      <thead><tr><th>마켓</th><th>현재가</th><th>스프레드(현재)</th><th>중앙 / 최대(최근 1시간)</th><th>왕복비용</th><th>상태</th></tr></thead>
-      <tbody></tbody>
-    </table></div>
-    <div class="empty" id="uniempty">—</div>
+  <div class="card">
+    <h2>📦 지금 들고 있는 것</h2>
+    <p class="hint">막대에서 <b>흰 선이 지금 위치</b>이고, 양 끝이 자동으로 팔리는 지점입니다.</p>
+    <div id="positions"></div>
   </div>
 
-  <div class="card" style="margin-top:16px">
-    <h2>체결 내역 (진입 → 청산)</h2>
-    <div class="scroll"><table id="rttbl">
-      <thead><tr><th>청산시각(KST)</th><th>전략</th><th>마켓</th><th>투입 → 회수</th><th>손익</th><th>손익률</th><th>진입가 → 청산가</th><th>보유</th><th>진입 이유 / 청산 사유</th></tr></thead>
-      <tbody></tbody>
-    </table></div>
-    <div class="empty" id="rtempty">완료된 체결 없음</div>
+  <div class="card">
+    <h2>🔍 지금 왜 안 사고 있나</h2>
+    <p class="hint">
+      봇은 <b>조건 3개가 동시에 맞을 때만</b> 삽니다. 하나라도 어긋나면 그냥 기다립니다.
+      <b>아무것도 안 사는 날이 대부분인 게 정상</b>입니다.
+    </p>
+    <div id="conds"></div>
   </div>
 
-  <div class="card" style="margin-top:16px">
-    <h2>최근 거래 (원시 로그)</h2>
-    <div class="scroll"><table id="tradetbl">
-      <thead><tr><th>시각(KST)</th><th>이벤트</th><th>전략</th><th>마켓</th><th>가격</th><th>손익</th><th>사유</th></tr></thead>
-      <tbody></tbody>
-    </table></div>
-    <div class="empty" id="tradeempty">거래 기록 없음</div>
+  <div class="card">
+    <h2>📜 최근 거래</h2>
+    <p class="hint">사고 판 것을 한 줄로 묶은 기록입니다.</p>
+    <div id="trips"></div>
   </div>
 
-  <div class="card" style="margin-top:16px">
-    <h2>이 봇이 어떻게 매매하는지 — 처음 보시는 분을 위한 안내</h2>
-    <div id="guide" style="padding:4px 14px 14px;font-size:13px;line-height:1.85;color:var(--fg)"></div>
+  <div class="card">
+    <h2>📖 이 봇은 무슨 전략을 쓰나</h2>
+    <details open>
+      <summary>한 줄 요약</summary>
+      <div class="doc">
+        <p><b>오르고 있는 코인이 잠깐 미끄러졌을 때 사서, 제자리로 돌아오면 판다.</b></p>
+        <p>떨어지는 걸 무작정 사는 게 아닙니다. <b>오르는 중인 것만</b> 골라서 그게 잠깐
+        미끄러진 순간만 삽니다. 보통 <b>1시간 안</b>에 사고팝니다.</p>
+      </div>
+    </details>
+    <details>
+      <summary>살 때 — 조건 3개가 전부 맞아야 함</summary>
+      <div class="doc"><ol>
+        <li><b>방금 확 미끄러졌다</b> — 직전 몇 분이 거의 전부 하락 (RSI2 ≤ 3)</li>
+        <li><b>큰 흐름은 아직 상승</b> — 추세가 꺾였으면 안 삽니다.
+            하락 추세에서 사면 그냥 계속 떨어집니다 (1시간봉 EMA200 위)</li>
+        <li><b>충분히 움직이는 코인이다</b> — 안 움직이면 되돌아와도 수수료 빼면 남는 게 없습니다.
+            <b>이 조건이 없으면 전략 전체가 마이너스</b>가 됩니다 (ATR ≥ 0.6%)</li>
+      </ol></div>
+    </details>
+    <details>
+      <summary>팔 때 — 4가지 중 먼저 오는 것</summary>
+      <div class="doc"><ul>
+        <li><b>되돌림 끝</b> — <b>가장 흔한 경우</b>입니다 (RSI2 ≥ 70)</li>
+        <li><b>익절</b> +2.5%</li>
+        <li><b>손절</b> −2.5% — 틀렸다고 인정하고 빠르게 자릅니다</li>
+        <li><b>시간 초과</b> 8시간 — 안 돌아오면 돈을 회수합니다</li>
+      </ul></div>
+    </details>
+    <details>
+      <summary>어떤 코인을 사나</summary>
+      <div class="doc">
+        <p>사는 값과 파는 값의 차이(호가 스프레드)가 <b>0.10% 이하</b>인 코인만 삽니다 —
+        BTC·ETH·XRP·SOL 같은 것들입니다.</p>
+        <p>거래 한 번에 기대하는 이익이 <b>+0.18%</b>뿐이기 때문입니다. 어떤 알트코인은
+        그 값 차이만 <b>0.9%</b>라 <b>사는 순간 이미 집니다.</b>
+        봇이 10분마다 다시 재서 자동으로 걸러냅니다.</p>
+      </div>
+    </details>
+    <details>
+      <summary>얼마나 벌 수 있나 (솔직하게)</summary>
+      <div class="doc" id="expect"></div>
+    </details>
   </div>
 
-  <div class="foot" id="foot">
-    <span id="footRule">헌장 —</span> · 왕복 수수료 0.1% + 호가 스프레드까지 비용으로 계산 · 자동 갱신 5초<br>
-    ⚠️ 실제 자금이 투입되는 자동매매입니다. 백테스트 성적은 미래를 보장하지 않으며 손실 위험이 있습니다.
+  <div class="card">
+    <h2>🛑 비상 정지</h2>
+    <p class="hint">누르면 봇이 <b>즉시 모든 코인을 팔고 멈춥니다.</b> 되돌리려면 서버를 다시 켜야 합니다.</p>
+    <button class="danger" onclick="kill()">전부 팔고 멈추기</button>
   </div>
+
+  <div class="foot">10초마다 자동 새로고침</div>
 </div>
 
 <script>
-const BASE = "/life-change";
-const won = n => (n>0?"+":"") + Math.round(n).toLocaleString("ko-KR") + "원";
-const won0 = n => Math.round(n).toLocaleString("ko-KR") + "원";
-const pct = n => (n>0?"+":"") + n.toFixed(2) + "%";
-const cls = n => n>0?"pos":(n<0?"neg":"");
+const BASE = location.pathname.replace(/\/$/, "");
+const won = n => (n==null||isNaN(n)) ? "—" : Math.round(n).toLocaleString("ko-KR")+"원";
+const wonS = n => (n==null||isNaN(n)) ? "—" : (n>0?"+":"")+Math.round(n).toLocaleString("ko-KR")+"원";
+const pct = (n,d=2) => (n==null||isNaN(n)) ? "—" : (n>=0?"+":"")+Number(n).toFixed(d)+"%";
+const cls = n => (n==null||isNaN(n)) ? "" : (n>0?"up":(n<0?"down":""));
+const esc = s => String(s??"").replace(/[<>&]/g, c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
+const kv = (k,v,n,c) => `<div class="kv"><div class="k">${k}</div>
+   <div class="v ${c||""}">${v}</div>${n?`<div class="n">${n}</div>`:""}</div>`;
 
-let SCOPE = "current";   // current=현재 가동 전략만 / all=과거 전략 포함
-function toggleScope(){
-  SCOPE = SCOPE==="current" ? "all" : "current";
-  document.getElementById("scopeChip").textContent = SCOPE==="current"?"현재 전략":"전체 기록(과거 포함)";
-  document.getElementById("scopeBtn").textContent = SCOPE==="current"?"과거 기록 보기":"현재 전략만 보기";
-  refresh();
+function renderBanner(s){
+  const r = s.risk||{}, bot = s.bot||{};
+  let kind="ok", state="🟢 정상 작동 중", why="";
+  if (!bot.running){
+    kind="bad"; state="⚫ 봇이 멈춰 있음"; why="매매 루프가 돌고 있지 않습니다.";
+  } else if (bot.dry_run){
+    kind="warn"; state="🧪 연습 모드";
+    why = s.forced_paper ? "실제 주문을 내지 않습니다 — "+esc(s.forced_paper)
+                         : "실제 주문 없이 신호만 기록하고 있습니다.";
+  } else if (r.halted){
+    kind="bad"; state="🔴 전면 정지";
+    why = "손실이 한도를 넘어 봇이 스스로 멈췄습니다. "+esc(r.halt_reason||"");
+  } else if (s.can_enter && s.can_enter!=="ok"){
+    kind="warn"; state="⏸️ 새로 사지 않는 중";
+    const map = {
+      "consecutive loss circuit (§5.3)":"연속으로 손절이 나서 잠시 쉬는 중입니다(안전장치).",
+      "daily loss limit hit (§5.2)":"오늘 손실 한도에 닿아 오늘은 더 사지 않습니다.",
+      "max concurrent positions (§5.5)":"이미 최대 개수(3개)를 들고 있어 더 사지 않습니다.",
+      "insufficient KRW balance (잔고 부족)":"원화가 부족해 더 살 수 없습니다."
+    };
+    why = (map[s.can_enter] || esc(s.can_enter)) + " 들고 있는 건 그대로 관리합니다.";
+  } else {
+    const n = (s.positions||[]).length;
+    why = n ? `코인 ${n}개를 들고 있고, 팔 자리를 기다리는 중입니다.`
+            : "살 자리를 기다리는 중입니다. 조건이 맞는 날이 드문 게 정상입니다.";
+  }
+  document.getElementById("banner").className = "banner "+kind;
+  document.getElementById("bstate").textContent = state;
+  document.getElementById("bwhy").innerHTML = why;
 }
 
-async function refresh(){
+function renderMoney(s){
+  const r = s.risk||{}, dd = r.drawdown_pct;
+  document.getElementById("money").innerHTML =
+    kv("평가액", won(r.equity), "원화 + 코인") +
+    kv("오늘 손익", wonS(r.daily_pnl), `오늘 한도 ${won(r.daily_loss_limit)}`, cls(r.daily_pnl)) +
+    kv("고점 대비", pct(-(dd||0)), "가장 좋았을 때보다", dd>0?"down":"") +
+    kv("보유 개수", (r.open_positions??0)+" / 3", "동시에 최대 3개");
+}
+
+function renderIncubation(inc){
+  const o = inc.overall||{}, t = inc.target||100, n = o.n||0;
+  let html = `<div class="bar"><i style="width:${Math.min(100,n/t*100)}%"></i></div>
+    <div class="muted" style="font-size:13px;margin-bottom:16px">
+      <b>${n}건</b> / ${t}건 모임 · ${esc(inc.verdict||"")}</div>`;
+  if (!n){
+    html += `<div class="empty">아직 사고판 거래가 없습니다.<br>
+             하루 1건 정도가 정상이라 며칠간 0건일 수도 있습니다.</div>`;
+  } else {
+    const pf = o.pf;
+    html += `<table><thead><tr><th>항목</th><th>실제</th><th>과거 데이터</th><th>무슨 뜻</th></tr></thead><tbody>
+      <tr><td>거래당 수익</td><td class="${cls(o.exp_pct)}">${pct(o.exp_pct,3)}</td>
+          <td class="muted">+0.176%</td><td class="muted">한 번 사고팔 때 평균</td></tr>
+      <tr><td>승률</td><td>${o.winrate==null?"—":o.winrate.toFixed(0)+"%"}</td>
+          <td class="muted">69%</td><td class="muted">10번 중 몇 번 이겼나</td></tr>
+      <tr><td>손익비</td><td>${pf==null?"—":(pf>99?"∞":pf.toFixed(2))}</td>
+          <td class="muted">1.50</td><td class="muted">번 돈 ÷ 잃은 돈<br>1보다 커야 함</td></tr>
+      <tr><td>누적 손익</td><td class="${cls(o.pnl_krw)}">${wonS(o.pnl_krw)}</td>
+          <td class="muted">—</td><td class="muted">실제로 늘어난 돈</td></tr>
+      <tr><td>확신도</td><td>${o.t==null?"—":(o.t>=0?"+":"")+o.t.toFixed(2)}</td>
+          <td class="muted">+2 이상</td><td class="muted">운이 아니라고 하려면<br>+2를 넘어야</td></tr>
+      <tr><td>체결 손해</td>
+          <td class="${o.slippage>0.25?"down":""}">${o.slippage==null?"기록 없음":pct(o.slippage,3)}</td>
+          <td class="muted">0.25% 이하</td><td class="muted">원한 값보다 얼마나<br>비싸게 샀나</td></tr>
+    </tbody></table>`;
+  }
+  const notes = inc.notes||[];
+  if (notes.length) html += `<div class="hint" style="margin:14px 0 0">`+
+      notes.map(x=>`<div style="margin:7px 0">${esc(x)}</div>`).join("")+`</div>`;
+  document.getElementById("incu").innerHTML = html;
+}
+
+function renderPositions(s){
+  const ps = s.positions||[];
+  if (!ps.length){
+    document.getElementById("positions").innerHTML =
+      `<div class="empty">지금은 아무것도 들고 있지 않습니다.<br>조건이 맞는 자리를 기다리는 중입니다.</div>`;
+    return;
+  }
+  document.getElementById("positions").innerHTML = ps.map(p=>{
+    const sl=p.sl, tp=p.tp, cur=p.pnl_pct, span=(tp-sl)||1;
+    const at = Math.max(0,Math.min(100,(cur-sl)/span*100));
+    const zero = Math.max(0,Math.min(100,(0-sl)/span*100));
+    return `<div class="box">
+      <div class="top">
+        <div><span class="sym">${esc((p.market||"").replace("KRW-",""))}</span>
+             <span class="tag">${esc(p.strategy||"")}</span></div>
+        <div class="${cls(p.pnl_krw)}" style="font-size:21px;font-weight:700">
+          ${wonS(p.pnl_krw)} <span style="font-size:13px">(${pct(cur)})</span></div>
+      </div>
+      <div class="gauge">
+        <div class="zone" style="left:0;width:${zero}%;background:var(--down)"></div>
+        <div class="zone" style="left:${zero}%;width:${100-zero}%;background:var(--up)"></div>
+        <div class="now" style="left:${at}%"></div>
+      </div>
+      <div class="gscale"><span>손절 ${pct(sl)}</span><span>본전</span><span>익절 ${pct(tp)}</span></div>
+      <div class="hint" style="margin:12px 0 0">
+        산 값 ${won(p.entry_price)} → 지금 ${won(p.current_price)} · 투입 ${won(p.size_krw)}<br>
+        <b>되돌림이 끝나면</b>(가장 흔함) 또는 위 양 끝에 닿으면 자동으로 팝니다.
+        8시간이 지나도 안 돌아오면 그냥 회수합니다.
+      </div></div>`;
+  }).join("");
+}
+
+function renderConditions(s){
+  const rows = [];
+  for (const [market, byStrat] of Object.entries(s.signals||{}))
+    for (const [strat, v] of Object.entries(byStrat))
+      if (v && v.rsi2 !== undefined) rows.push({market, strat, ...v});
+  if (!rows.length){
+    document.getElementById("conds").innerHTML =
+      `<div class="empty">아직 판정 정보가 없습니다.<br>봇이 막 켜졌다면 1~2분 기다려 주세요.</div>`;
+    return;
+  }
+  const gateOk = r => r.atr_pct!=null && (r.atr_pct/100) >= r.gate;
+  const score = r => (r.rsi_ok?1:0)+(r.trend_up===true?1:0)+(gateOk(r)?1:0);
+  rows.sort((a,b)=>score(b)-score(a));
+  const mk = ok => ok ? "✅" : "⬜";
+  document.getElementById("conds").innerHTML = rows.slice(0,6).map(r=>`
+    <div class="box" style="padding:14px">
+      <div class="top" style="margin-bottom:4px">
+        <div><span class="sym" style="font-size:15px">${esc(r.market.replace("KRW-",""))}</span>
+             <span class="tag">${esc(r.strat)}</span></div>
+        <div class="muted" style="font-size:12px">${score(r)}/3 통과</div>
+      </div>
+      <div class="cond"><span class="mk">${mk(r.rsi_ok)}</span><span>
+        <b>방금 미끄러졌나?</b>
+        <small>지금 ${r.rsi2} · ${r.entry} 이하여야 함 (낮을수록 많이 떨어진 것)</small></span></div>
+      <div class="cond"><span class="mk">${mk(r.trend_up===true)}</span><span>
+        <b>큰 흐름이 상승인가?</b>
+        <small>${r.trend_up===true?"상승 중":(r.trend_up===false?"하락 중 — 이럴 땐 사지 않습니다":"판정 대기")}</small></span></div>
+      <div class="cond"><span class="mk">${mk(gateOk(r))}</span><span>
+        <b>충분히 움직이나?</b>
+        <small>지금 ${r.atr_pct==null?"—":r.atr_pct+"%"} · ${(r.gate*100).toFixed(2)}% 이상이어야 함
+        (작으면 수수료도 못 건집니다)</small></span></div>
+    </div>`).join("");
+}
+
+const EXIT_KO = {reverse:"되돌림 끝 (정상)", take_profit:"익절", stop_loss:"손절",
+                 dead:"시간 초과 회수", kill_switch:"비상 정지", partial_take_profit:"절반 익절"};
+function renderTrips(trips){
+  if (!Array.isArray(trips) || !trips.length){
+    document.getElementById("trips").innerHTML = `<div class="empty">아직 완료된 거래가 없습니다.</div>`;
+    return;
+  }
+  document.getElementById("trips").innerHTML =
+    `<table><thead><tr><th>코인</th><th>손익</th><th>보유</th><th>왜 팔았나</th></tr></thead><tbody>`+
+    trips.slice(0,12).map(t=>{
+      const h = t.hold_sec==null ? "—"
+        : (t.hold_sec>=3600 ? (t.hold_sec/3600).toFixed(1)+"시간" : Math.round(t.hold_sec/60)+"분");
+      const p = (t.size_krw && t.pnl_krw!=null) ? (t.pnl_krw/t.size_krw*100) : null;
+      const why = EXIT_KO[String(t.exit_reason||"").split(":")[0]] || esc(t.exit_reason||"—");
+      return `<tr>
+        <td>${esc((t.market||"").replace("KRW-",""))}
+            <div class="muted" style="font-size:11px">${esc((t.exit_ts||"").slice(5,16).replace("T"," "))}</div></td>
+        <td class="${cls(t.pnl_krw)}">${wonS(t.pnl_krw)}
+            <div class="muted" style="font-size:11px">${p==null?"":pct(p)}</div></td>
+        <td class="muted">${h}</td>
+        <td class="muted" style="font-size:12.5px">${why}</td></tr>`;
+    }).join("")+`</tbody></table>`;
+}
+
+function renderExpect(s){
+  const eq = (s.risk||{}).equity || 90000;
+  const size = Math.min(eq/3, eq*0.01/0.025);
+  const per = size*0.00176, day = per*1.0;
+  document.getElementById("expect").innerHTML = `
+    <p>지금 계좌(<b>${won(eq)}</b>) 기준으로 <b>과거 데이터가 말하는</b> 기대치입니다.
+       미래를 보장하지 않습니다.</p>
+    <ul>
+      <li>거래 빈도: <b>하루 1번쯤</b></li>
+      <li>한 번 거래에: <b>약 ${wonS(per)}</b> (+0.176%)</li>
+      <li>한 달에: <b>약 ${wonS(day*30)}</b></li>
+      <li>1년에: <b>약 ${wonS(day*365)}</b> (계좌의 약 21%)</li>
+      <li>과거 가장 나빴을 때: <b>−${won(eq*0.056)}</b> (−5.6%)</li>
+    </ul>
+    <p><b>솔직히 한 달에 커피 두 잔 값입니다.</b> 시드가 작아서 그렇습니다.
+       지금 목적은 돈을 버는 게 아니라 <b>"이 전략이 실제로도 통하는가"를 100건으로 확인하는 것</b>입니다.
+       그게 확인된 뒤에 금액을 늘릴지 판단하는 순서가 맞습니다.</p>`;
+}
+
+async function load(){
   try{
-    const q = "&scope="+SCOPE;
-    const [st, tr, sta, rt, ex] = await Promise.all([
+    const [s, inc, trips] = await Promise.all([
       fetch(BASE+"/api/status").then(r=>r.json()),
-      fetch(BASE+"/api/trades?limit=30"+q).then(r=>r.json()),
-      fetch(BASE+"/api/stats?scope="+SCOPE).then(r=>r.json()),
-      fetch(BASE+"/api/roundtrips?limit=30"+q).then(r=>r.json()),
-      fetch(BASE+"/api/expectations").then(r=>r.json()),
+      fetch(BASE+"/api/incubation").then(r=>r.json()),
+      fetch(BASE+"/api/roundtrips?limit=20").then(r=>r.json()),
     ]);
-    renderStatus(st); renderTrades(tr); renderStats(sta, ex); renderRoundTrips(rt);
-    renderSignals(st); renderUniverse(st); renderExpect(ex); renderGuide(st);
+    renderBanner(s); renderMoney(s); renderIncubation(inc);
+    renderPositions(s); renderConditions(s); renderTrips(trips); renderExpect(s);
+    document.getElementById("updated").textContent =
+      new Date().toLocaleTimeString("ko-KR")+" 기준 · 헌장 "+((s.bot||{}).charter_version||"");
   }catch(e){
-    document.getElementById("running").textContent = "연결 실패";
+    document.getElementById("updated").textContent = "연결 실패 — 봇이 꺼져 있을 수 있습니다";
   }
 }
-
-function renderStatus(s){
-  const bot=s.bot, r=s.risk;
-  const modeEl=document.getElementById("mode");
-  modeEl.textContent = bot.mode;
-  modeEl.className = "badge " + (bot.dry_run?"dry":"live");
-  document.getElementById("dot").className = "dot " + (bot.running?"on":"off");
-  document.getElementById("running").textContent = bot.running?"가동 중":"정지";
-  document.getElementById("meta").textContent =
-    `시작 ${fmt(bot.started_at)} · 마지막 tick ${fmt(bot.last_tick_at)} · ${bot.tick_count} ticks · 유니버스 ${bot.universe.join(", ")}`
-    + (bot.last_error?` · ⚠️ ${bot.last_error}`:"");
-
-  const halt=document.getElementById("halt");
-  if(r.halted){halt.style.display="block";halt.textContent="⛔ 매매 정지됨 — "+r.halt_reason;}
-  else{halt.style.display="none";}
-
-  document.getElementById("kpis").innerHTML = [
-    kpi("자본(계좌 총자산)", won0(r.equity), ""),
-    kpi("주문가능 원화", won0(r.available_krw ?? 0), ""),
-    kpi("당일 손익", won(r.daily_pnl), cls(r.daily_pnl)),
-    kpi("오픈 포지션", r.open_positions+" / 3", ""),
-    kpi("연속 손실", r.consecutive_losses+" / 5", r.consecutive_losses>=3?"neg":""),
-    kpi("1거래 리스크", won0(r.max_loss_per_trade ?? 0)+" (1%)", "", true),
-    kpi("일일 한도", won0(r.daily_loss_limit ?? 0)+" (3%)", "", true),
-    kpi("진입 가능", s.can_enter, "", true),
-  ].join("");
-
-  // positions
-  const tb=document.querySelector("#postbl tbody");
-  tb.innerHTML = s.positions.map(p=>`<tr>
-    <td>${p.strategy.toUpperCase()}</td><td>${p.market}</td>
-    <td>${p.entry_price.toLocaleString()}</td><td>${p.current_price.toLocaleString()}</td>
-    <td class="${cls(p.pnl_krw)}">${won(p.pnl_krw)}</td>
-    <td class="${cls(p.pnl_pct)}">${pct(p.pnl_pct)}</td>
-    <td class="chip">${p.sl.toFixed(1)}/+${p.tp.toFixed(1)}%</td></tr>`).join("");
-  document.getElementById("posn").textContent = s.positions.length;
-  document.getElementById("posempty").style.display = s.positions.length?"none":"block";
-  document.querySelector("#postbl").style.display = s.positions.length?"table":"none";
-
-  // 헌장/전략 메타 (레짐 표시는 v1.4에서 제거 — 레짐 필터를 쓰지 않는다)
-  const tfName = t => ({minute5:"5분봉", minute15:"15분봉", minute60:"1시간봉"}[t] || t);
-  document.getElementById("footRule").textContent =
-    `헌장 ${bot.charter_version||"—"} · 전략 ${(bot.active_strategies||[]).join(" + ")}`;
-  if(s.forced_paper){
-    const h=document.getElementById("halt");
-    h.style.display="block";
-    h.textContent="🧪 모의 모드로 강제됨 — "+s.forced_paper+" (주문 미전송)";
-  }
-  window.__tfName = tfName;
-  
-  // 전략 선택기 렌더링
-  renderStrategySelector(bot.active_strategies || []);
-}
-
-const ALL_STRATS = ["rsi2", "rsi2_15m", "easy_teaching"];
-function renderStrategySelector(active){
-  const el = document.getElementById("strategySelector");
-  if(!el) return;
-  el.innerHTML = ALL_STRATS.map(strat => {
-    const isOn = active.includes(strat);
-    const color = isOn ? "var(--accent)" : "var(--muted)";
-    const bdColor = isOn ? "var(--accent)" : "var(--line)";
-    const fw = isOn ? "bold" : "normal";
-    const icon = isOn ? "🟢" : "⚪";
-    return `<button class="theme-btn" style="margin-right:8px; border-color:${bdColor}; color:${color}; font-weight:${fw};"
-      onclick="toggleStrategy('${strat}', ${!isOn})">${icon} ${strat}</button>`;
-  }).join("");
-}
-
-async function toggleStrategy(name, enable){
-  const action = enable ? "켜시" : "끄시";
-  if(!confirm(`전략 '${name}' 을(를) ${action}겠습니까?`)) return;
-  try{
-    let token = localStorage.getItem("lc_token");
-    if(!token) {
-      token = prompt("DASHBOARD_TOKEN 입력 (없으면 빈칸):");
-      if(token) localStorage.setItem("lc_token", token);
-    }
-    const r = await fetch(BASE+"/api/strategy/toggle", {
-      method:"POST",
-      headers:{"Content-Type":"application/json", "x-token":token||""},
-      body: JSON.stringify({name, enable})
-    });
-    if(!r.ok){
-      alert("변경 실패: "+(await r.text()));
-      localStorage.removeItem("lc_token");
-      return;
-    }
-    refresh();
-  }catch(e){
-    alert("오류: "+e);
-  }
-}
-
-// 진입 진단: 조건 중 무엇에 막혔는지 보여준다
-function renderSignals(s){
-  const rows=[];
-  const sig = s.signals || {};
-  for(const [m, byStrat] of Object.entries(sig)){
-    for(const [name, d] of Object.entries(byStrat)){
-      const enter = d.action==="enter_long";
-      
-      let col1 = "—", col2 = "—", col3 = "—";
-      let c1cls = "", c2cls = "", c3cls = "";
-      
-      if(name === "easy_teaching") {
-        const obOk = d.ob === true;
-        const fvgOk = d.fvg === true;
-        col1 = d.ob_range && d.ob_range !== "-" ? `OB ${d.ob_range} ${obOk?"✅":""}` : "—";
-        c1cls = obOk ? "pos" : "";
-        
-        col2 = d.fvg_range && d.fvg_range !== "-" ? `FVG ${d.fvg_range} ${fvgOk?"✅":""}` : "—";
-        c2cls = fvgOk ? "pos" : "";
-        
-        col3 = `Confluence: ${d.confluence || 0}`;
-        c3cls = (d.confluence >= 2) ? "pos" : "";
-      } else {
-        // 기존 RSI2 전략
-        const judged = d.rsi2!=null;
-        const gate = (d.gate!=null? (d.gate*100).toFixed(1)+"%" : "—");
-        const atr  = (d.atr_pct!=null? d.atr_pct.toFixed(3)+"%" : "—");
-        const atrOk = (d.atr_pct!=null && d.gate!=null) ? (d.atr_pct >= d.gate*100) : null;
-        
-        const entry = (d.entry!=null ? d.entry : 3);
-        const rsiOk = (d.rsi_ok!=null ? d.rsi_ok : (d.rsi2!=null && d.rsi2<=entry));
-        
-        col1 = judged?`${d.rsi2.toFixed(1)} <span style="color:var(--muted)">/ ≤${entry}</span> ${rsiOk?"✅":""}`:"—";
-        c1cls = rsiOk ? "pos" : "";
-        
-        col2 = judged?`${atr} <span style="color:var(--muted)">/ ${gate}</span> ${atrOk?"✅":(atrOk===false?"❌":"")}`:"—";
-        c2cls = atrOk ? 'pos' : (atrOk===false?'neg':'');
-        
-        col3 = !judged?'<span class="chip">—</span>'
-             : d.trend_up===true?'<span class="chip trend">상승 ✅</span>'
-             : d.trend_up===false?'<span class="chip range">하락 ❌</span>'
-             : '<span class="chip">확인불가</span>';
-      }
-
-      rows.push(`<tr>
-        <td>${m.replace("KRW-","")}</td>
-        <td>${name} <span class="chip">${(window.__tfName||(x=>x))(d.timeframe||"")}</span></td>
-        <td class="${c1cls}">${col1}</td>
-        <td class="${c2cls}">${col2}</td>
-        <td class="${c3cls}">${col3}</td>
-        <td style="color:${enter?'var(--pos)':'var(--muted)'}">${enter?"🟢 진입 신호":d.reason||""}</td>
-      </tr>`);
-    }
-  }
-  document.querySelector("#sigtbl tbody").innerHTML = rows.join("");
-  document.getElementById("sigempty").style.display = rows.length?"none":"block";
-  document.querySelector("#sigtbl").style.display = rows.length?"table":"none";
-}
-
-
-// 유니버스: 스프레드 통과/제외를 한눈에
-function renderUniverse(s){
-  const uni = new Set(s.universe||[]);
-  const spreads = s.spreads||{}, rejected = s.spread_rejected||{}, newly = new Set(s.spread_rejected_new||[]);
-  const unstable = new Set(s.spread_unstable||[]), stats = s.spread_stats||{};
-  const all = new Set([...Object.keys(spreads), ...Object.keys(rejected), ...uni, ...newly]);
-  const rows=[...all].map(m=>{
-    const sp = spreads[m] ?? rejected[m];
-    const cost = sp!=null ? (0.1 + sp) : null;
-    let state, klass="";
-    if(uni.has(m)){ state="🟢 거래 대상"; klass="pos"; }
-    else if(newly.has(m)){ state="신규 상장(1년 미만) 제외"; }
-    else if(unstable.has(m)){ state="스프레드 변동 커서 제외"; klass="neg"; }
-    else if(sp!=null && sp>0.1){ state="스프레드 초과 제외"; klass="neg"; }
-    else { state="후보(미선정)"; }
-    return {m, sp, cost, state, klass, on:uni.has(m)};
-  }).sort((a,b)=> (b.on-a.on) || ((a.sp??9)-(b.sp??9)));
-  document.querySelector("#unitbl tbody").innerHTML = rows.map(r=>`<tr>
-    <td>${r.m.replace("KRW-","")}</td>
-    <td>${(s.prices||{})[r.m]!=null?Math.round(s.prices[r.m]).toLocaleString()+"원":"—"}</td>
-    <td class="${r.klass}">${r.sp!=null?r.sp.toFixed(3)+"%":"—"}</td>
-    <td style="color:var(--muted)">${stats[r.m]?`${stats[r.m].median}% / ${stats[r.m].max}% (${stats[r.m].n}회)`:"—"}</td>
-    <td>${r.cost!=null?r.cost.toFixed(3)+"%":"—"}</td>
-    <td>${r.state}</td></tr>`).join("");
-  const has=rows.length;
-  document.getElementById("uniempty").style.display = has?"none":"block";
-  document.querySelector("#unitbl").style.display = has?"table":"none";
-}
-
-// 초보자 가이드 — 실제 계좌 숫자로 채워서 보여준다
-function renderGuide(s){
-  const r = s.risk || {};
-  const eq = r.equity || 0;
-  const risk = r.max_loss_per_trade || 0;          // 자본 1%
-  const daily = r.daily_loss_limit || 0;           // 자본 3%
-  const sl5 = 2.5, sl15 = 3.0;                     // 전략별 손절 폭(%)
-  const alloc = Math.floor(eq/3);                  // 전략당 배분 상한 (자본÷3)
-  const raw5 = risk>0 ? Math.floor(risk/(sl5/100)) : 0;
-  const size5 = Math.min(raw5, alloc);
-  const w = n => Math.round(n).toLocaleString("ko-KR")+"원";
-  document.getElementById("guide").innerHTML = `
-  <b>1. 어떤 종목을 사나요?</b><br>
-  업비트 원화 마켓 전체(약 270개)에서 <b>세 관문</b>을 통과한 종목만 후보가 됩니다.
-  ① 24시간 거래대금 상위 ② <b>호가 스프레드 0.10% 이하</b> ③ <b>상장 1년 이상</b>.
-  ②가 필요한 이유: 가격이 낮은 코인은 호가 한 칸이 이미 0.5~1%여서, 사고파는 것만으로
-  수익보다 큰 비용을 냅니다(예: DOGE 왕복 0.93%). ③은 상장 당일 코인처럼 검증되지 않은
-  종목을 걸러냅니다. 현재 통과 종목은 위 <b>유니버스</b> 표에 있습니다.<br><br>
-
-  <b>2. 언제 사나요? — 세 조건이 동시에 맞을 때만</b><br>
-  ① <b>RSI(2) ≤ 3</b>(5분봉) / <b>≤ 7</b>(15분봉) : 직전 몇 봉이 거의 전부 하락한 과매도 상태<br>
-  ② <b>1시간봉이 EMA200 위</b> : 큰 흐름은 상승 (하락 추세의 급락은 사지 않습니다)<br>
-  ③ <b>변동성(ATR) ≥ 0.6%</b>(5분봉) / <b>≥ 0.83%</b>(15분봉) : 움직임이 수수료보다 충분히 클 때만<br>
-  → 한마디로 <b>"오르는 중인 코인이 잠깐 급하게 밀렸을 때 산다"</b> 입니다.
-  세 조건이 모두 맞는 순간은 드물기 때문에 <b>하루 1회 정도</b>, 조용한 장에서는 <b>며칠간 0회</b>도 정상입니다.
-  지금 무엇에 막혀 있는지는 위 <b>진입 진단</b> 표에서 볼 수 있습니다.<br><br>
-
-  <b>3. 얼마를 넣나요? — 현재 계좌 ${w(eq)} 기준</b><br>
-  "한 번 틀렸을 때 잃을 금액"을 먼저 정하고 거기서 거꾸로 계산합니다.<br>
-  · 1거래 최대 손실 = 자본의 <b>1% = ${w(risk)}</b><br>
-  · 손절 폭이 2.5%이므로 → ${w(risk)} ÷ 2.5% = <b>${w(raw5)}</b> 까지 살 수 있지만,<br>
-  · 한 전략이 자본의 1/3(<b>${w(alloc)}</b>)을 넘지 못하게 제한 → 실제 진입 금액 <b>약 ${w(size5)}</b>
-    (계좌의 <b>${eq? (size5/eq*100).toFixed(0):0}%</b>)<br>
-  · 동시 최대 <b>3개 종목</b>까지 보유 → 최대 노출은 계좌의 100%<br>
-  즉 <b>한 번의 실패로 잃는 돈은 계좌의 1% 수준</b>으로 묶어 둡니다.<br><br>
-
-  <b>4. 언제 파나요? — 먼저 오는 조건에서</b><br>
-  🎯 <b>익절</b> +2.5%(5분봉)/+3.0%(15분봉) 도달 · 🛑 <b>손절</b> 같은 폭의 반대 방향 ·
-  ↩️ <b>되돌림 완료</b> RSI(2) ≥ 70 (원래 목적 달성, 실제로 가장 많은 청산 경로) ·
-  ⏱ <b>시간 손절</b> 8시간 지나도 결판이 안 나면 회수해 다음 기회에 씁니다.<br>
-  10초마다 가격을 확인하므로, 급등하는 코인은 목표가를 넘겨 더 좋게 팔릴 수도 있고
-  급락 시 손절선보다 조금 나쁘게 팔릴 수도 있습니다.<br><br>
-
-  <b>5. 자동 안전장치</b><br>
-  하루 손실이 <b>${w(daily)}</b>(자본 3%)에 닿으면 그날 신규 진입 중단 ·
-  <b>연속 5회</b> 손절 시 일시정지 · 고점 대비 <b>−15%</b>면 전면 정지 ·
-  언제든 우측 상단 <b>🛑 KILL</b> 로 전량 청산+정지.<br><br>
-
-  <b>6. 기대치를 현실적으로</b><br>
-  2년 데이터 검증 결과는 <b>승률 약 70%, 거래당 +0.26%</b> 입니다. 거래 한 건당 손익은
-  ${w(size5)} × 0.26% ≈ <b>${w(size5*0.0026)}</b> 수준이고, 좋은 국면에 하루 1~2회 거래됩니다.
-  한 번 크게 버는 방식이 아니라 <b>작은 우위를 여러 번 반복</b>하는 방식입니다.
-  <span style="color:var(--muted)">개별 거래는 이보다 크게 벌거나 잃을 수 있습니다(변동성 때문).
-  표본이 쌓이기 전의 성과는 운의 영향이 큽니다.</span>`;
-}
-
-// 백테스트 기대치 (실전 대조용)
-function renderExpect(ex){
-  const rows=[["rsi2","5분봉"],["rsi2_15m","15분봉"],["combined","병행 합계"]];
-  document.getElementById("expect").innerHTML = rows.map(([k,label])=>{
-    const e=ex[k]||{};
-    // note: 파라미터가 개정돼 이 수치가 현재 설정과 다를 때의 경고 (헌장 v2.3)
-    const note = e.note? `<br><span style="color:var(--muted)">⚠ ${e.note}</span>`:"";
-    return `<div class="strat"><div class="n">${label}</div>
-      <div class="m">승률 ${e.win_rate}% · PF ${e.profit_factor}<br>
-      거래당 +${e.exp_pct}% · 하루 ${e.trades_per_day}회${note}</div></div>`;
-  }).join("");
-}
-
-function renderStats(list, ex){
-  const el=document.getElementById("strats");
-  if(!list.length){
-    el.innerHTML='<div class="empty">청산된 거래 없음 — 조건 충족 시 자동 진입합니다</div>';return;
-  }
-  el.innerHTML = list.map(s=>{
-    const e=(ex||{})[s.strategy]||{};
-    const wrGap = e.win_rate!=null && s.trades>=5 ? ` <span style="color:var(--muted)">(기대 ${e.win_rate}%)</span>`:"";
-    const pf = s.profit_factor!=null? s.profit_factor : "—";
-    return `<div class="strat">
-    <div class="n">${s.strategy}${s.active?"":" <span class='chip'>비활성</span>"}</div>
-    <div class="m">${s.trades}거래 · 승률 ${s.win_rate}%${wrGap}<br>
-    PF ${pf} · 평균 ${s.avg_pnl>0?"+":""}${s.avg_pnl}원<br>
-    <span class="${cls(s.total_pnl)}">${won(s.total_pnl)}</span></div></div>`;
-  }).join("");
-}
-
-function renderTrades(list){
-  const tb=document.querySelector("#tradetbl tbody");
-  tb.innerHTML = list.map(t=>`<tr>
-    <td>${fmt(t.ts)}</td><td>${badge(t.event)}</td><td>${(t.strategy||"").toUpperCase()}</td>
-    <td>${t.market||""}</td><td>${t.price?Math.round(t.price).toLocaleString():""}</td>
-    <td class="${cls(t.pnl_krw)}">${t.event==="exit"?won(t.pnl_krw):""}</td>
-    <td style="color:var(--muted)">${t.event==="exit"?exitKo(t.reason):(t.reason||"")}</td></tr>`).join("");
-  document.getElementById("tradeempty").style.display = list.length?"none":"block";
-  document.querySelector("#tradetbl").style.display = list.length?"table":"none";
-}
-
-// 청산 사유를 한글로 (로그 원문은 그대로 두고 표시만 바꾼다)
-const EXIT_KO = {
-  take_profit: "🎯 익절 (목표가 도달)",
-  stop_loss:   "🛑 손절 (손실 제한)",
-  reverse:     "↩️ 되돌림 완료 (신호 청산)",
-  dead:        "⏱ 시간 손절 (기다려도 안 와서 회수)",
-  kill_switch: "⚠️ 강제 청산 (킬 스위치)",
-  eod:         "구간 종료",
-};
-function exitKo(raw){
-  if(!raw) return "";
-  const [kind, ...rest] = String(raw).split(":");
-  const ko = EXIT_KO[kind] || kind;
-  let extra = rest.join(":").trim();
-  if(extra === kind) extra = "";        // 과거 로그의 "take_profit:take_profit" 중복 제거
-  return extra ? `${ko} — ${extra}` : ko;
-}
-
-function renderRoundTrips(list){
-  const tb=document.querySelector("#rttbl tbody");
-  tb.innerHTML = (list||[]).map(t=>{
-    const inv = t.size_krw, pnl = t.pnl_krw;
-    const back = (inv!=null && pnl!=null) ? inv + pnl : null;
-    const rate = (inv && pnl!=null) ? pnl/inv*100 : null;
-    return `<tr>
-    <td>${fmt(t.exit_ts)}</td>
-    <td>${t.strategy||""}</td>
-    <td><b>${(t.market||"").replace("KRW-","")}</b></td>
-    <td>${inv!=null?won0(inv):"—"} <span style="color:var(--muted)">→</span> ${back!=null?won0(back):"—"}</td>
-    <td class="${cls(pnl)}"><b>${pnl!=null?won(pnl):""}</b></td>
-    <td class="${cls(rate)}">${rate!=null?pct(rate):"—"}</td>
-    <td style="color:var(--muted)">${t.entry_price!=null?Math.round(t.entry_price).toLocaleString():"—"} → ${t.exit_price!=null?Math.round(t.exit_price).toLocaleString():"—"}</td>
-    <td>${hold(t.hold_sec)}</td>
-    <td style="color:var(--muted)">${reasonPair(t)}</td></tr>`;
-  }).join("");
-  const has=(list||[]).length;
-  document.getElementById("rtempty").style.display = has?"none":"block";
-  document.querySelector("#rttbl").style.display = has?"table":"none";
-}
-const reasonPair=t=>{
-  const inr=(t.entry_reason||"").toString();
-  return `${inr?"↳ "+inr+"<br>":""}⤴ ${exitKo(t.exit_reason)||"—"}`;
-};
-const hold=s=>{
-  if(s==null) return "—";
-  s=Math.round(s); const h=Math.floor(s/3600), m=Math.floor((s%3600)/60);
-  return h?`${h}시간 ${m}분`:`${m}분`;
-};
-
-const kpi=(l,v,c,small)=>`<div class="kpi"><div class="label">${l}</div><div class="val ${c} ${small?'small':''}">${v}</div></div>`;
-const badge=e=>({entry:'🟢 진입',exit:'⚪ 청산',exit_partial:'🟡 부분청산',exit_fail:'🔴 청산실패',entry_fail:'🔴 진입실패',recover:'🔧 복원'}[e]||e);
-const fmt=t=>t?t.replace("T"," ").replace(/(\+00:00|\+09:00|Z)$/,"").slice(5,19):"—";
-
-// ── 라이트/다크 테마 (A) ──────────────────────────────────
-function applyTheme(mode){
-  document.documentElement.setAttribute("data-theme", mode);
-  const b=document.getElementById("themeBtn");
-  if(b) b.textContent = mode==="light" ? "☀️ 라이트" : "🌙 다크";
-}
-function toggleTheme(){
-  const cur=document.documentElement.getAttribute("data-theme")||"dark";
-  const next=cur==="light"?"dark":"light";
-  localStorage.setItem("lc-theme", next);
-  applyTheme(next);
-}
-(function initTheme(){
-  const saved=localStorage.getItem("lc-theme");
-  const sys=window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light":"dark";
-  applyTheme(saved || sys);
-})();
-
-async function doKill(){
-  const token=prompt("킬 스위치 — DASHBOARD_TOKEN 입력 (전 포지션 시장가 청산 + 정지):");
+async function kill(){
+  if(!confirm("정말 전부 팔고 멈출까요?\n되돌리려면 서버를 다시 켜야 합니다.")) return;
+  const token = prompt("대시보드 토큰을 입력하세요");
   if(!token) return;
-  const r=await fetch(BASE+"/api/kill",{method:"POST",headers:{"x-token":token}});
-  alert(r.ok? "킬 스위치 실행됨": "실패: "+r.status);
-  refresh();
+  const r = await fetch(BASE+"/api/kill",{method:"POST",headers:{"x-token":token}});
+  alert(r.ok ? "정지했습니다." : "실패했습니다 — 토큰을 확인해 주세요.");
+  load();
 }
-
-refresh(); setInterval(refresh, 5000);
+load(); setInterval(load, 10000);
 </script>
 </body>
 </html>

@@ -164,15 +164,23 @@ def verdict(overall: dict, per_strategy: dict[str, dict]) -> tuple[str, list[str
     return f"🟢 순항 ({n}/{TARGET_TRADES}건)", notes
 
 
-def report(db_path: str | None = None) -> dict:
-    trips = load_roundtrips(db_path)
+def report(db_path: str | None = None, since: str | None = None) -> dict:
+    """since 를 주지 않으면 헌장의 인큐베이션 시작 기준일부터 센다(§11-3)."""
+    start = since if since is not None else C.INCUBATION_START
+    trips = load_roundtrips(db_path, since=start)
+    all_trips = load_roundtrips(db_path)                   # 기준일 이전까지 포함한 전체
     overall = summarize(trips)
     per = {name: summarize([t for t in trips if t.strategy == name])
            for name in BACKTEST}
     per = {k: v for k, v in per.items() if v.get("n")}
     head, notes = verdict(overall, per)
+    prior = len(all_trips) - len(trips)
+    if prior:
+        notes.append(f"ℹ️ 기준일({start[:10]}) 이전 {prior}건은 세지 않습니다 — 변동성 게이트가 "
+                     f"미검증 값이었고 전략 귀속도 어긋나 있었습니다(조건이 다른 거래).")
     return {"verdict": head, "notes": notes, "overall": overall, "per_strategy": per,
-            "target": TARGET_TRADES, "backtest": BACKTEST}
+            "target": TARGET_TRADES, "backtest": BACKTEST, "since": start,
+            "excluded_prior": prior}
 
 
 def format_text(rep: dict) -> str:

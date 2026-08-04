@@ -378,6 +378,13 @@ ACTIVE_STRATEGIES: tuple[str, ...] = ("rsi2", "rsi2_15m")
 # INCUBATING — 통과했지만 아직 실전 관찰 중. 주문금액을 최소주문금액으로 강제한다.
 # 둘 중 어디에도 없는 전략은 ACTIVE_STRATEGIES 에 넣을 수 없다(tests/test_charter.py 가 막는다).
 VALIDATED_STRATEGIES: frozenset[str] = frozenset({"rsi2", "rsi2_15m"})
+
+# ── 인큐베이션 표본 시작 기준일 (§11-3, v2.9) ────────────────
+# 이 시각 **이후**의 거래만 인큐베이션 표본으로 센다. 그 전 기록은 조건이 달라 섞으면 안 된다:
+#   ① 변동성 게이트가 미검증 테스트값(0.3%/0.4%)이었다 — 백테스트에서 음수인 지점
+#   ② 오펀 복구가 아무 슬롯에나 붙어 easy_teaching 손실이 rsi2 장부에 기록됐다(v2.7에서 수정)
+# 2026-08-04 = 검증값(0.6%/0.83%)으로 되돌리고 귀속 수정본을 배포한 날.
+INCUBATION_START = "2026-08-04T00:00:00+09:00"
 INCUBATING_STRATEGIES: frozenset[str] = frozenset()
 
 
