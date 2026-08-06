@@ -31,9 +31,28 @@ def test_position_size_capped_by_available_krw():
 
 
 def test_daily_loss_limit_scales():
-    # §5.2
-    assert C.daily_loss_limit_krw(90_000) == 2_700
-    assert C.daily_loss_limit_krw(200_000) == 6_000
+    """§5.2 — 자본에 비례한다."""
+    assert C.daily_loss_limit_krw(200_000) == 2 * C.daily_loss_limit_krw(100_000)
+    assert C.daily_loss_limit_krw(90_000) == 90_000 * C.DAILY_LOSS_LIMIT_RATIO
+
+
+def test_circuits_are_defined_in_R_units():
+    """
+    §5 v3.0 — 서킷은 **R 배수**로 정의되어야 한다(lab_circuit.py 13차).
+    절대 %로 박아두면 RISK_PER_TRADE_RATIO 를 바꿀 때 서로 어긋난다
+    (f=1% 기준 값에 f=2.4% 를 넣으면 손절 1.25번에 일일한도가 걸린다).
+    이 테스트는 그 결합을 강제한다 — 매직넘버로 되돌리면 실패한다.
+    """
+    f = C.RISK_PER_TRADE_RATIO
+    assert C.DAILY_LOSS_LIMIT_RATIO == C.DAILY_LOSS_LIMIT_R * f
+    assert C.MAX_DRAWDOWN_RATIO == C.MAX_DRAWDOWN_R_MULT * f
+    assert C.TOTAL_HEAT_RATIO == f * C.MAX_CONCURRENT_POSITIONS
+    # 오발률 근거(13차): 일일 5R = 연 2.1회, MDD 12.5R = 살아있는 엣지에서 25.7% 발동.
+    # 일일한도가 동시보유 전량 손절(=총위험)보다 작으면 정상 이벤트에 상시 발동한다.
+    assert C.DAILY_LOSS_LIMIT_R >= C.MAX_CONCURRENT_POSITIONS, (
+        "일일한도가 동시보유 전량 손절보다 작으면 한 번의 상관 이벤트로 하루가 끝난다")
+    # MDD 정지선은 일일한도보다 충분히 커야 한다(하루치로 전면정지가 걸리면 안 된다)
+    assert C.MAX_DRAWDOWN_R_MULT > C.DAILY_LOSS_LIMIT_R * 2
 
 
 def test_strategy_risk_reward_rule():
@@ -136,3 +155,54 @@ def test_대시보드_전략세대_분리():
     clause, params = BotService._scope_clause(svc, "current")
     assert "strategy IN" in clause and set(params) == set(C.ACTIVE_STRATEGIES)
     assert BotService._scope_clause(svc, "all") == ("", ())
+
+
+# ── v3.0 회귀 테스트: 2026-08-06 에 고친 서킷 버그 두 개 ──────────
+def test_daily_pnl_auto_resets_on_date_boundary():
+    """
+    ⚠ 회귀: 이전 버전은 `reset_daily()` 가 **리포 어디에서도 호출되지 않았다.**
+    그래서 daily_pnl 이 영구 누적됐고, 누적 손실이 한도를 넘는 순간 '일일' 한도가
+    사실상 **영구 정지**로 변했다. can_enter() 가 날짜를 보고 스스로 풀어야 한다.
+    """
+    from bot.risk_manager import RiskManager, RiskState
+    r = RiskManager(RiskState(capital=100_000, available_krw=100_000))
+    r.on_close(-C.daily_loss_limit_krw(100_000) * 2)      # 한도의 2배를 잃는다
+    r.s.daily_date = "어제"                                # 날짜 경계를 넘긴 상황
+    ok, why = r.can_enter()
+    assert ok, f"날짜가 바뀌면 일일 한도는 풀려야 한다: {why}"
+    assert r.s.daily_pnl == 0.0
+
+
+def test_consecutive_loss_circuit_cannot_deadlock():
+    """
+    ⚠ 회귀: 연속손절로 차단되면 신규 진입이 없어 '승리'가 나올 수 없고,
+    그러면 카운터가 영영 리셋되지 않아 **영구 잠김**이 된다.
+    날짜 경계에서 반드시 풀려야 한다.
+    """
+    from bot.risk_manager import RiskManager, RiskState
+    r = RiskManager(RiskState(capital=100_000, available_krw=100_000))
+    for _ in range(C.MAX_CONSECUTIVE_LOSSES):
+        r.on_close(-100)
+    r._roll_day()                                          # 같은 날에는 차단이 유지된다
+    r.s.daily_date = "어제"
+    ok, _ = r.can_enter()
+    assert ok, "연속손절 차단은 익일 자동 해제되어야 한다(데드락 금지)"
+    assert r.s.consecutive_losses == 0
+
+
+def test_fingerprint_covers_risk_params():
+    """
+    §9.7 v3.0 — 승인 지문은 **§5 리스크 파라미터까지** 덮어야 한다.
+    이전 버전은 전략 스펙만 해싱해서, f·MDD 정지선을 바꿔도 이전 승인이 그대로 통했다.
+    (이 게이트가 생긴 계기가 '검증 0건 설정이 이전 승인으로 실계좌에서 돈' 사건이다)
+    """
+    import importlib
+    from config import charter as ch
+    before = ch.charter_fingerprint()
+    orig = ch.RISK_PER_TRADE_RATIO
+    try:
+        ch.RISK_PER_TRADE_RATIO = orig * 2
+        assert ch.charter_fingerprint() != before, "f 를 바꿨는데 지문이 그대로다"
+    finally:
+        ch.RISK_PER_TRADE_RATIO = orig
+    assert ch.charter_fingerprint() == before

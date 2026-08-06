@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
-CHARTER_VERSION = "v2.5"
+CHARTER_VERSION = "v3.0"
 
 # ── 자본·수수료 (헌장 §1, §13) ────────────────────────────────
 # 자본은 더 이상 고정값이 아니라 '실계좌 잔고(총 자산)'를 런타임에 읽어서 쓴다 (헌장 v1.1 §7.1).
@@ -20,12 +20,33 @@ ALLOC_PER_STRATEGY_RATIO = 1 / 3    # 전략당 배분 ≈33% = 30,000원 (§7.1
 FEE_ROUNDTRIP = 0.001               # 왕복 수수료 0.1% (0.05% × 2) (§6, 업비트 KRW)
 MIN_ORDER_KRW = 5_000               # 업비트 최소주문금액 (§6.5)
 
-# ── 리스크·서킷 브레이커 (헌장 §5) ───────────────────────────
-RISK_PER_TRADE_RATIO = 0.01         # 1거래 최대손실 = 자본 1% (§5.1)
-DAILY_LOSS_LIMIT_RATIO = 0.03       # 일일 손실 한도 = 자본 -3% (§5.2)
-MAX_CONSECUTIVE_LOSSES = 5          # 연속 손절 차단 (§5.3)
-MAX_DRAWDOWN_RATIO = 0.15           # MDD 전면정지 = 고점 대비 -15% (§5.4)
-MAX_CONCURRENT_POSITIONS = 3        # 동시 최대 포지션 (§3.4, §5.5)
+# ── 리스크·서킷 브레이커 (헌장 §5, v3.0 재설계 2026-08-06) ────
+# 근거: backtesting/research/lab_kelly.py(11차) · lab_circuit.py(13차)
+#
+# ★ 설계 원칙 — **서킷은 R 배수로 정의한다.**
+#   R = 1거래 리스크 단위(= RISK_PER_TRADE_RATIO). 서킷을 절대 %로 박아두면 f 를 바꿀 때마다
+#   서로 어긋난다(f=1% 기준으로 정해둔 값에 f=2.4% 를 넣으면 손절 1.25번에 하루가 끝난다).
+#   R 로 정의하면 f 를 바꿔도 **오발률이 그대로 유지**된다.
+#
+# ★ 임계값은 '오발률'로 정했다 — 백테스트 수익으로 튜닝하지 않았다(그건 과최적화다).
+#   rsi2 5분봉 2,294거래 실측 분포에서:
+#     일일 5R  → 정상 작동 중 연 2.1회 발동 (3R 은 연 4.2회로 잦다)
+#     12연패   → 연 3.7회 (현행 5연패는 **연 28.7회** — 사실상 상시 발동이었다)
+#     MDD 30% → 살아있는 엣지에서 25.7% 발동 / 죽은 엣지에서 93.7% 발동 = 분리력 최대
+#               (현행 15% 는 **살아있을 때도 98.7% 발동** — 안전장치가 아니라 타이머였다)
+RISK_PER_TRADE_RATIO = 0.01         # 1거래 최대손실 = 자본 1% (§5.1) = 1R
+                                    # ⚠ 인큐베이션 100건 통과 전까지 1% 유지.
+                                    #   통과 후 쿼터켈리 0.024 로 올리는 것이 11차 권고다
+                                    #   (켈리 f*=9.48%, 현행은 그 1/9.5).
+DAILY_LOSS_LIMIT_R = 5.0            # 일일 손실 한도 = 5R (§5.2)
+MAX_CONSECUTIVE_LOSSES = 12         # 연속 손절 차단 (§5.3). 5 → 12 (오발 연 28.7회 → 3.7회)
+MAX_DRAWDOWN_R_MULT = 12.5          # MDD 전면정지 = 12.5R (§5.4). f=1% → 12.5%, f=2.4% → 31%
+MAX_CONCURRENT_POSITIONS = 3        # 동시 최대 포지션 (§3.4, §5.5). f 와 곱해 '총 위험'이 된다
+
+# 파생값 — 코드가 쓰는 실제 비율. f 를 바꾸면 전부 따라 움직인다.
+DAILY_LOSS_LIMIT_RATIO = DAILY_LOSS_LIMIT_R * RISK_PER_TRADE_RATIO      # 1% → 5%
+MAX_DRAWDOWN_RATIO = MAX_DRAWDOWN_R_MULT * RISK_PER_TRADE_RATIO         # 1% → 12.5%
+TOTAL_HEAT_RATIO = RISK_PER_TRADE_RATIO * MAX_CONCURRENT_POSITIONS      # 동시 최대 위험
 
 # ── 봉·시간 손절 (헌장 §1, §4-A) ─────────────────────────────
 BASE_TIMEFRAME = "minute5"          # 기준 봉 (pyupbit interval)
@@ -412,7 +433,15 @@ def position_cap_for(strategy: str, krw: float) -> float:
 # 이제 '가동 전략 목록 + 그 전략들의 스펙'까지 지문에 넣는다 — 사람이 버전을 올리는 것을
 # 잊어도 매매 규칙이 바뀌면 승인이 자동으로 무효화된다.
 def charter_fingerprint() -> str:
-    """실거래 승인 대상 = 헌장 버전 + 가동 전략과 그 스펙. 바뀌면 재승인이 필요하다."""
+    """
+    실거래 승인 대상 = 헌장 버전 + 가동 전략·스펙 + **§5 리스크/서킷 파라미터**.
+    바뀌면 재승인이 필요하다(그전까지 자동으로 모의 모드).
+
+    ⚠ v3.0 에서 리스크 파라미터를 추가했다. 이전 버전은 **전략 스펙만** 해싱해서,
+      `RISK_PER_TRADE_RATIO` 나 MDD 정지선 같은 §5 값을 바꿔도 승인 게이트가 눈치채지
+      못했다 — 이 게이트를 만든 이유(검증 안 된 설정이 이전 승인으로 실계좌에서 도는 것)가
+      정확히 그런 경우이므로 같은 구멍을 남겨둘 수 없다.
+    """
     import hashlib
 
     parts = [CHARTER_VERSION]
@@ -420,6 +449,14 @@ def charter_fingerprint() -> str:
         spec = STRATEGY_SPECS[name]
         fields = sorted(f"{k}={v!r}" for k, v in vars(spec).items())
         parts.append(f"{name}({','.join(fields)})")
+    # §5 리스크·서킷 — 자본을 직접 위험에 노출시키는 값들이므로 승인 대상이다
+    parts.append("risk(" + ",".join([
+        f"f={RISK_PER_TRADE_RATIO!r}",
+        f"daily={DAILY_LOSS_LIMIT_R!r}R",
+        f"streak={MAX_CONSECUTIVE_LOSSES!r}",
+        f"mdd={MAX_DRAWDOWN_R_MULT!r}R",
+        f"maxpos={MAX_CONCURRENT_POSITIONS!r}",
+    ]) + ")")
     digest = hashlib.sha256("|".join(parts).encode()).hexdigest()[:8]
     return f"{CHARTER_VERSION}-{digest}"
 
