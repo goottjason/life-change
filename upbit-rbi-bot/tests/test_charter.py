@@ -9,20 +9,45 @@ CAP = 90_000  # 기준 자본(예시): 계좌에 9만원 있을 때
 
 
 def test_risk_per_trade_scales_with_capital():
-    # §5.1: 1거래 최대손실 = 자본 1%
-    assert C.max_loss_per_trade_krw(90_000) == 900
-    assert C.max_loss_per_trade_krw(300_000) == 3_000  # 입금하면 커진다
+    """§5.1 — 1거래 최대손실은 자본에 비례한다."""
+    assert C.max_loss_per_trade_krw(90_000) == 90_000 * C.RISK_PER_TRADE_RATIO
+    assert C.max_loss_per_trade_krw(300_000) == 300_000 * C.RISK_PER_TRADE_RATIO
 
 
 def test_position_size_matches_stop_loss():
-    # §7.2: 손절 -3% → 30,000원, 손절 -6% → 15,000원 (capital=90k)
-    assert C.position_size_krw(0.03, CAP) == 30_000
-    assert C.position_size_krw(0.06, CAP) == 15_000
+    """§7.2 — 포지션 크기 × 손절거리 = 1거래 리스크 (배분상한에 걸리지 않는 한)."""
+    for stop in (0.03, 0.06):
+        size = C.position_size_krw(stop, CAP)
+        alloc_cap = CAP * C.ALLOC_PER_STRATEGY_RATIO
+        if size < alloc_cap:                     # 리스크 공식이 구속하는 경우
+            assert abs(size * stop - CAP * C.RISK_PER_TRADE_RATIO) < 1
+
+
+def test_effective_risk_is_not_silently_capped():
+    """
+    ★ 2026-08-06 회귀 — **실효 리스크 = min(f, 배분상한 × 손절거리)** 다.
+    배분상한이 먼저 걸리면 `RISK_PER_TRADE_RATIO` 를 올려도 아무 효과가 없다.
+    실제로 그런 상태였다: 배분 33.3% × 손절 2.5% = 0.83% 여서 f=1% 든 2.4% 든 실효는 0.83%.
+    가동 전략의 손절거리에서 실효 f 가 명목 f 의 90% 이상이어야 한다.
+    """
+    for name in C.ACTIVE_STRATEGIES:
+        spec = C.STRATEGY_SPECS[name]
+        stop = spec.stop_pct or (spec.atr_stop_mult * 0.01) or C.FALLBACK_STOP_RATIO
+        size = C.position_size_krw(stop, CAP)
+        effective = size * stop / CAP
+        assert effective >= C.RISK_PER_TRADE_RATIO * 0.9, (
+            f"{name}: 실효 f {effective:.4%} 가 명목 f {C.RISK_PER_TRADE_RATIO:.4%} 에 크게 못 미친다 "
+            f"— ALLOC_PER_STRATEGY_RATIO({C.ALLOC_PER_STRATEGY_RATIO}) 가 먼저 구속하고 있다")
+
+
+def test_allocation_does_not_exceed_capital():
+    """배분상한 × 동시보유 > 100% 면 자본을 초과 배정하게 된다."""
+    assert C.ALLOC_PER_STRATEGY_RATIO * C.MAX_CONCURRENT_POSITIONS <= 1.0 + 1e-9
 
 
 def test_position_size_scales_with_capital():
-    # 자본이 3배면 포지션도 3배
-    assert C.position_size_krw(0.03, 270_000) == 90_000
+    """자본이 3배면 포지션도 3배 (상한 종류와 무관하게 둘 다 자본 비례이므로 성립)."""
+    assert C.position_size_krw(0.03, 270_000) == 3 * C.position_size_krw(0.03, 90_000)
 
 
 def test_position_size_capped_by_available_krw():
@@ -205,4 +230,20 @@ def test_fingerprint_covers_risk_params():
         assert ch.charter_fingerprint() != before, "f 를 바꿨는데 지문이 그대로다"
     finally:
         ch.RISK_PER_TRADE_RATIO = orig
+    assert ch.charter_fingerprint() == before
+
+
+def test_fingerprint_covers_allocation():
+    """
+    ★ 2026-08-06 회귀 — 배분비율은 실효 리스크를 직접 결정하므로 승인 지문에 들어가야 한다.
+    (f 를 올려도 배분상한이 먼저 걸리면 실효 리스크가 안 바뀐다 — 조용히 지나가면 안 된다)
+    """
+    from config import charter as ch
+    before = ch.charter_fingerprint()
+    orig = ch.ALLOC_PER_STRATEGY_RATIO
+    try:
+        ch.ALLOC_PER_STRATEGY_RATIO = orig / 2
+        assert ch.charter_fingerprint() != before
+    finally:
+        ch.ALLOC_PER_STRATEGY_RATIO = orig
     assert ch.charter_fingerprint() == before

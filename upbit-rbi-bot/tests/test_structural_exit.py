@@ -267,5 +267,5 @@ def test_구조레벨_진입시_사이징은_구조_손절거리를_쓴다():
             flat_df(tf="15min"), note="test", sig=Sig())
     pos = next(iter(t.positions.values()))
     assert pos.stop_price == 980.0 and pos.target_price == 1040.0
-    # 자본 90,000 × 1% = 900원 리스크 ÷ 2.0% = 45,000 → 전략당 배분 상한 30,000으로 clamp
-    assert captured["krw"] == pytest.approx(30_000.0)
+    # 구조 손절거리(2.0%)로 사이징한다 — 배분상한·잔고 clamp 를 반영한 값과 일치해야 한다
+    assert captured["krw"] == pytest.approx(C.position_size_krw(0.02, 90_000.0))

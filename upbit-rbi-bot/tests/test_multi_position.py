@@ -88,18 +88,21 @@ def test_두_전략이_같은_코인에_동시진입하지_않는다():
 
 
 def test_서로_다른_코인이면_동시보유():
+    """동시보유 한도 안에서는 서로 다른 코인을 함께 들 수 있다.
+    (v3.0 에서 한도가 1 이 되었으므로 한도만큼만 잡히는지 확인한다)"""
     t = bare_trader()
     t._process_market("KRW-BTC", FRAMES)
     t._process_market("KRW-ETH", FRAMES)
-    assert len(t.positions) == 2
-    assert {p.market for p in t.positions.values()} == {"KRW-BTC", "KRW-ETH"}
+    expected = min(2, C.MAX_CONCURRENT_POSITIONS)
+    assert len(t.positions) == expected
+    assert {p.market for p in t.positions.values()} <= {"KRW-BTC", "KRW-ETH"}
 
 
 def test_동시포지션_한도를_넘지_않는다():
     t = bare_trader()
     for m in ("KRW-BTC", "KRW-ETH", "KRW-XRP", "KRW-SOL", "KRW-BCH"):
         t._process_market(m, FRAMES)
-    assert len(t.positions) == C.MAX_CONCURRENT_POSITIONS == 3
+    assert len(t.positions) == C.MAX_CONCURRENT_POSITIONS
 
 
 def test_포지션_키는_전략과_코인의_조합():
