@@ -48,8 +48,14 @@ from backtesting.research.fastsim import ExitCfg, Precomp, simulate_arrays
 from backtesting.research.lab_screen import ENTRY_DELAY, SLIPPAGE
 
 # 라이브 rsi2 파라미터 (charter.STRATEGY_SPECS["rsi2"] 와 lab.sig_rsi2 기본값)
-CFG5 = dict(th=5.0, gate=0.006, sl=0.025, time_stop=96, tf="minute5")
-CFG15 = dict(th=3.0, gate=0.010, sl=0.030, time_stop=32, tf="minute15")
+# ⚠ 라이브 값과 반드시 일치시킬 것 — charter.STRATEGY_SPECS 에서 읽어온다.
+#   (2026-08-06: th=5.0 으로 잘못 박아뒀던 것을 수정. 라이브는 entry_level=3.0 이다)
+from config.charter import STRATEGY_SPECS as _S
+CFG5 = dict(th=_S["rsi2"].entry_level, gate=_S["rsi2"].min_atr_ratio,
+            sl=_S["rsi2"].stop_pct, time_stop=_S["rsi2"].time_stop_bars, tf="minute5")
+CFG15 = dict(th=_S["rsi2_15m"].entry_level, gate=_S["rsi2_15m"].min_atr_ratio,
+             sl=_S["rsi2_15m"].stop_pct, time_stop=_S["rsi2_15m"].time_stop_bars,
+             tf="minute15")
 
 
 def collect(tfkey: str):
