@@ -59,6 +59,51 @@ def _has_col(con, name: str) -> bool:
     return name in {r[1] for r in con.execute("PRAGMA table_info(trades)")}
 
 
+def activity(db_path: str | None = None,
+             strategies: tuple[str, ...] = ("rsi2", "rsi2_15m")) -> dict:
+    """
+    **"거래가 없는데 고장인가?" 에 답하는 사실 데이터.**
+
+    모델(백테스트 기대 빈도)이 아니라 **실제 진입 기록**만 센다. 기대 빈도는 유니버스·게이트가
+    바뀌면 같이 바뀌는데 그 값을 갱신하지 않으면 오히려 오해를 만든다 — 실제로 그랬다:
+    2026-08-04 에 게이트를 되돌린(5분 0.3%→0.6% · 15분 0.4%→1.0%) 뒤 빈도가 크게 떨어졌는데,
+    리포트는 여전히 "하루 약 1회가 정상"이라고 말해 운영자가 고장으로 오인했다.
+    """
+    from datetime import datetime, timezone, timedelta
+    path = db_path or settings.db_path
+    now = datetime.now(timezone.utc) + timedelta(hours=9)      # KST
+    try:
+        con = sqlite3.connect(path)
+        rows = [r[0] for r in con.execute(
+            "SELECT ts FROM trades WHERE event='entry' AND strategy IN (%s) ORDER BY id DESC"
+            % ",".join("?" * len(strategies)), strategies).fetchall()]
+    except sqlite3.Error:
+        return {}
+    finally:
+        try:
+            con.close()
+        except Exception:
+            pass
+    if not rows:
+        return {"last_entry": None, "days_since": None, "n7": 0, "n30": 0, "n90": 0}
+
+    def _dt(x):
+        try:
+            return datetime.fromisoformat(x)
+        except ValueError:
+            return None
+    ds = [d for d in (_dt(x) for x in rows) if d is not None]
+    if not ds:
+        return {}
+    last = max(ds)
+    ref = now.astimezone(last.tzinfo) if last.tzinfo else now.replace(tzinfo=None)
+    gap = (ref - last).total_seconds() / 86400
+    cnt = lambda days: sum(1 for d in ds if (ref - d).days < days)
+    return {"last_entry": last.isoformat(timespec="minutes"),
+            "days_since": round(gap, 1),
+            "n7": cnt(7), "n30": cnt(30), "n90": cnt(90)}
+
+
 def load_roundtrips(db_path: str | None = None,
                     strategies: tuple[str, ...] = ("rsi2", "rsi2_15m"),
                     since: str | None = None) -> list[Roundtrip]:
@@ -183,18 +228,33 @@ def report(db_path: str | None = None, since: str | None = None) -> dict:
     if prior:
         notes.append(f"ℹ️ 기준 시각({start[:16].replace('T',' ')}) **이전에 진입한** {prior}건은 "
                      f"세지 않습니다 — 검증되지 않은 설정으로 산 거래라 조건이 다릅니다.")
+    act = activity(db_path)
+    # 최근 30일 진입이 0건이면 '조용한 국면'이 아니라 점검 대상이다
+    if act.get("n30") == 0 and act.get("days_since") is not None:
+        notes.append(f"🚨 최근 30일 진입 0건 (마지막 진입 {act['days_since']:.0f}일 전) "
+                     f"— 신호 조건·유니버스·서킷을 점검할 것.")
+    elif act.get("days_since") is not None and act["days_since"] >= 7:
+        notes.append(f"ℹ️ 마지막 진입이 {act['days_since']:.0f}일 전입니다. "
+                     f"최근 30일 {act['n30']}건 · 90일 {act['n90']}건 — 빈도가 낮은 국면입니다.")
     return {"verdict": head, "notes": notes, "overall": overall, "per_strategy": per,
             "target": TARGET_TRADES, "backtest": BACKTEST, "since": start,
-            "excluded_prior": prior}
+            "excluded_prior": prior, "activity": act}
 
 
 def format_text(rep: dict) -> str:
     """텔레그램/콘솔용 평이한 한국어 리포트."""
     o = rep["overall"]
     if not o.get("n"):
-        return ("📊 rsi2 인큐베이션 리포트\n"
-                "아직 청산된 거래가 없습니다. 신호를 기다리는 중입니다.\n"
-                "(하루 약 1회 거래가 정상이며, 조용한 국면에서는 며칠간 0건일 수 있습니다)")
+        a = rep.get("activity") or {}
+        lines = ["📊 rsi2 인큐베이션 리포트",
+                 "아직 청산된 거래가 없습니다. 신호를 기다리는 중입니다."]
+        if a.get("last_entry"):
+            lines.append(f"마지막 진입  {a['last_entry'][:16].replace('T', ' ')} "
+                         f"({a['days_since']:.0f}일 전)")
+            lines.append(f"진입 건수    최근 7일 {a['n7']} · 30일 {a['n30']} · 90일 {a['n90']}")
+        lines.append("※ 기대 빈도는 유니버스·변동성 게이트에 따라 크게 달라집니다. "
+                     "위 '진입 건수'가 실제 상태입니다.")
+        return "\n".join(lines)
     lines = [f"📊 rsi2 인큐베이션 리포트 — {rep['verdict']}", ""]
     bar_n = min(20, int(o["n"] / rep["target"] * 20))
     lines.append(f"진행 [{'█' * bar_n}{'░' * (20 - bar_n)}] {o['n']}/{rep['target']}건")

@@ -247,3 +247,44 @@ def test_fingerprint_covers_allocation():
     finally:
         ch.ALLOC_PER_STRATEGY_RATIO = orig
     assert ch.charter_fingerprint() == before
+
+
+# ── 인큐베이션 활동 지표 (2026-08-08) ────────────────────────────
+def test_activity_reports_facts_not_stale_expectations(tmp_path):
+    """
+    ★ 2026-08-08 회귀 — "거래가 없는데 고장인가?"에 **사실**로 답해야 한다.
+    이전 리포트는 "하루 약 1회가 정상"이라는 **낡은 백테스트 기대치**를 문구로 박아뒀는데,
+    08-04 게이트 복원 뒤 실제 빈도가 하루 0.39건으로 떨어지면서 운영자가 고장으로 오인했다.
+    """
+    import sqlite3
+    from datetime import datetime, timezone, timedelta
+    from incubation import progress as P
+
+    db = tmp_path / "t.sqlite"
+    con = sqlite3.connect(db)
+    con.execute("CREATE TABLE trades (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, "
+                "event TEXT, strategy TEXT, market TEXT, price REAL, volume REAL, "
+                "size_krw REAL, pnl_krw REAL, reason TEXT, fill_price REAL)")
+    now = datetime.now(timezone.utc) + timedelta(hours=9)
+    for days_ago in (2, 20, 200):          # 7일내 0건 · 30일내 2건 · 90일내 2건
+        con.execute("INSERT INTO trades (ts,event,strategy,market,price,volume,size_krw,"
+                    "pnl_krw,reason) VALUES (?,'entry','rsi2','KRW-XRP',1,1,1000,0,'x')",
+                    ((now - timedelta(days=days_ago)).isoformat(timespec="minutes"),))
+    con.commit(); con.close()
+
+    a = P.activity(str(db))
+    assert a["n7"] == 1 and a["n30"] == 2 and a["n90"] == 2
+    assert 1.5 < a["days_since"] < 2.5
+
+    # 30일 0건이면 '조용한 국면'이 아니라 점검 경보를 띄워야 한다
+    db2 = tmp_path / "t2.sqlite"
+    con = sqlite3.connect(db2)
+    con.execute("CREATE TABLE trades (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, "
+                "event TEXT, strategy TEXT, market TEXT, price REAL, volume REAL, "
+                "size_krw REAL, pnl_krw REAL, reason TEXT, fill_price REAL)")
+    con.execute("INSERT INTO trades (ts,event,strategy,market,price,volume,size_krw,"
+                "pnl_krw,reason) VALUES (?,'entry','rsi2','KRW-XRP',1,1,1000,0,'x')",
+                ((now - timedelta(days=45)).isoformat(timespec="minutes"),))
+    con.commit(); con.close()
+    rep = P.report(str(db2))
+    assert any("최근 30일 진입 0건" in n for n in rep["notes"])
