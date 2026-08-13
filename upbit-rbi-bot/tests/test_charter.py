@@ -300,3 +300,34 @@ def test_gap_thresholds_match_measured_distribution():
     assert P.GAP_INFO_DAYS >= 14, "실측 95분위(17일)보다 낮으면 상시 안내가 뜬다"
     assert P.GAP_ALERT_DAYS >= 39, "실측 99분위(38.8일) 이상이어야 오발하지 않는다"
     assert P.GAP_ALERT_DAYS > P.GAP_INFO_DAYS
+
+
+def test_fingerprint_covers_universe():
+    """
+    ★ 2026-08-13 v3.1 — 승인 지문은 **거래 대상 유니버스**까지 덮어야 한다.
+    종목 추가·스프레드 상한 변경은 '실제로 무엇을 사는지'를 바꾼다.
+    v3.0 까지는 빠져 있어 DOGE 편입이 이전 승인으로 통과할 뻔했다.
+    """
+    from config import charter as ch
+    before = ch.charter_fingerprint()
+    orig = dict(ch.VALIDATED_MARKETS)
+    try:
+        ch.VALIDATED_MARKETS["ZZZTEST"] = 0.001
+        assert ch.charter_fingerprint() != before, "종목을 추가했는데 지문이 그대로다"
+    finally:
+        ch.VALIDATED_MARKETS.clear(); ch.VALIDATED_MARKETS.update(orig)
+    assert ch.charter_fingerprint() == before
+
+
+def test_validated_symbol_gets_its_own_spread_cap():
+    """
+    §3.2-h v3.1 — 검증된 종목은 **그 종목의 검증 상한**을 쓴다.
+    (DOGE 가 0.002%p 차이로 영구 배제됐던 문제)
+    단 해당 전략의 블랙리스트 종목은 완화하지 않는다.
+    """
+    from config import charter as ch
+    assert ch.strategy_spread_cap("rsi2", "KRW-DOGE") == ch.VALIDATED_MARKETS["DOGE"]
+    assert ch.strategy_spread_cap("rsi2", "KRW-XRP") == ch.MAX_SPREAD_RATIO
+    for sym in ch.STRATEGY_BLACKLIST.get("rsi2", set()):
+        assert ch.strategy_spread_cap("rsi2", f"KRW-{sym}") == ch.MAX_SPREAD_RATIO, sym
+    assert ch.strategy_spread_cap("rsi2") == ch.MAX_SPREAD_RATIO      # market 없으면 기본값

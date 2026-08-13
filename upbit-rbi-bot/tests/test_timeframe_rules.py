@@ -103,9 +103,27 @@ def test_양쪽_음수종목은_블랙리스트():
 
 
 def test_15분봉_전용종목은_완화상한과_5분금지가_짝을_이룬다():
-    """완화 상한을 받은 종목은 반드시 5분봉이 금지돼야 한다(비용 초과 진입 방지)."""
-    for sym in C.WIDE_SPREAD_ALLOWED:
-        assert sym in C.STRATEGY_BLACKLIST["rsi2"], sym
+    """
+    완화 상한을 받은 종목은 5분봉이 금지돼야 한다(비용 초과 진입 방지).
+
+    v3.1 예외 — **소폭 완화**(RSI2_MAX_RELAXED_SPREAD 이내)는 그 스프레드에서 §11 을
+    통과한 종목에 한해 5분봉을 허용한다. DOGE(0.11%)가 그 경우다.
+    큰 완화(0.25% 종목들)는 여전히 5분봉 금지여야 한다.
+    """
+    for sym, cap in C.WIDE_SPREAD_ALLOWED.items():
+        if cap <= C.RSI2_MAX_RELAXED_SPREAD:
+            continue                      # 소폭 완화 — §11 통과 종목만 여기 온다
+        assert sym in C.STRATEGY_BLACKLIST["rsi2"], (
+            f"{sym}: 완화 상한 {cap:.2%} 는 소폭({C.RSI2_MAX_RELAXED_SPREAD:.2%})을 "
+            f"넘으므로 5분봉이 금지돼야 한다")
+
+
+def test_소폭완화_천장을_넘는_종목은_없다():
+    """5분봉에서 허용되는 완화는 천장 이내여야 한다 — 넘기려면 손익분기 측정이 먼저다."""
+    for sym, cap in C.WIDE_SPREAD_ALLOWED.items():
+        if sym in C.STRATEGY_BLACKLIST.get("rsi2", set()):
+            continue
+        assert cap <= C.RSI2_MAX_RELAXED_SPREAD, f"{sym} {cap:.2%}"
 
 
 # ── v2.1: 검증된 종목만 거래 (§3.2-i, 헌장 §0.3) ─────────────

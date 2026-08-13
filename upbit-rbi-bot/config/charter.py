@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
-CHARTER_VERSION = "v3.0"
+CHARTER_VERSION = "v3.1"
 
 # ── 자본·수수료 (헌장 §1, §13) ────────────────────────────────
 # 자본은 더 이상 고정값이 아니라 '실계좌 잔고(총 자산)'를 런타임에 읽어서 쓴다 (헌장 v1.1 §7.1).
@@ -235,6 +235,14 @@ VALIDATED_MARKETS: dict[str, float] = {
     # 15분봉만 양수 (5분봉은 STRATEGY_BLACKLIST 로 금지)
     "AVAX": 0.0025, "ETC": 0.0025, "DOT": 0.0025, "ENS": 0.0025, "SUI": 0.0025,
     "NEAR": 0.001,
+    # DOGE (2026-08-13 편입) — 스프레드가 0.930% → 0.102% 로 9배 좁아지면서 거래 가능해졌다.
+    #   §11 재검정(477거래, 실측 스프레드 0.102% 반영): 승률 66.5% · PF 1.55 ·
+    #   거래당 +0.152% · 월클러스터 t +2.23 → **5개 항목 전부 통과**.
+    #   ⚠ 성과가 홀드아웃에 몰려 있다(탐색 −0.043% / 홀드아웃 +0.291%, 양수월 7/7).
+    #     탐색 구간엔 스프레드가 0.93% 여서 애초에 거래 불가였으므로 그 구간을 반증으로
+    #     쓰기 어렵지만, "최근 7개월만 좋았을" 가능성도 배제할 수 없다. 인큐베이션에서 확인한다.
+    #   상한 0.0011 = 실측 0.102% + 소폭 여유. 넓어지면 스크리너가 자동으로 뺀다.
+    "DOGE": 0.0011,
 }
 
 # ── 종목별 허용 타임프레임 (§3.2-h, v2.1) ─────────────────────
@@ -259,6 +267,15 @@ STRATEGY_BLACKLIST: dict[str, set[str]] = {
 WIDE_SPREAD_ALLOWED: dict[str, float] = {
     k: v for k, v in VALIDATED_MARKETS.items() if v > MAX_SPREAD_RATIO
 }
+
+# 5분봉(rsi2)에서 허용하는 **완화 상한의 천장** (§3.2-h, v3.1).
+# 기본 상한(0.10%)보다 넓은 종목은 원칙적으로 5분봉 금지다 — 한 봉 움직임이 작아
+# 비용에 민감하기 때문이다(0.25% 종목들이 STRATEGY_BLACKLIST["rsi2"] 에 있는 이유).
+# 다만 **소폭 완화**는 그 스프레드에서 §11 을 통과했다면 허용한다.
+#   실측 근거: rsi2 의 손익분기 스프레드(= gross − 수수료) 중앙값 0.079% · 상위 25% 0.179%.
+#   DOGE 는 손익분기 0.254% 로 0.11% 상한에 충분한 여유가 있다(§11 5개 항목 통과).
+# 이 천장을 넘기려면 그 종목의 손익분기 스프레드를 먼저 측정할 것.
+RSI2_MAX_RELAXED_SPREAD = 0.0012
 
 # 투자경고·투자주의 종목 제외 (v2.0) — 업비트가 `market/all?isDetails=true` 로 제공한다.
 # 경고(warning): 상장폐지 검토 등. 주의(caution): 가격급등락·거래량급증·소수계정 집중 등 조작 징후.
@@ -484,6 +501,14 @@ def charter_fingerprint() -> str:
         #   실효는 0.83% 그대로였다. 승인 대상에서 빠지면 같은 일이 조용히 반복된다.
         f"alloc={ALLOC_PER_STRATEGY_RATIO!r}",
     ]) + ")")
+    # ★ 거래 대상 유니버스도 승인 대상이다 (v3.1, 2026-08-13).
+    #   종목을 추가하거나 스프레드 상한을 바꾸면 **실제로 무엇을 사는지**가 달라진다.
+    #   v3.0 까지는 이게 지문에서 빠져 있어, DOGE 를 넣어도 이전 승인이 그대로 통했다.
+    parts.append("universe(" + ",".join([
+        f"cap={MAX_SPREAD_RATIO!r}",
+        "validated=" + ";".join(f"{k}:{v}" for k, v in sorted(VALIDATED_MARKETS.items())),
+        "blacklist=" + ";".join(f"{k}:{sorted(v)}" for k, v in sorted(STRATEGY_BLACKLIST.items())),
+    ]) + ")")
     digest = hashlib.sha256("|".join(parts).encode()).hexdigest()[:8]
     return f"{CHARTER_VERSION}-{digest}"
 
@@ -561,15 +586,27 @@ def entry_rr_ok(entry: float, stop: float, target: float) -> bool:
     return entry_rr(entry, stop, target) >= MIN_ENTRY_RR
 
 
-def strategy_spread_cap(strategy: str) -> float:
-    """전략별 스프레드 상한 (§3.2-h, v2.1).
-
-    5분봉(rsi2)은 한 봉 움직임이 작아 비용에 민감하므로 기본 상한(0.1%)을 그대로 쓴다.
-    15분봉(rsi2_15m)은 검증 통과 종목에 한해 완화된 상한(WIDE_SPREAD_ALLOWED)까지 허용한다 —
-    상한 자체는 종목별로 `screener.cap_for` 가 판단하므로 여기서는 기본값을 반환한다.
+def strategy_spread_cap(strategy: str, market: str | None = None) -> float:
     """
-    return MAX_SPREAD_RATIO if strategy == "rsi2" else max(
+    전략별·종목별 스프레드 상한 (§3.2-h, v2.1 → v3.1).
+
+    market 을 주면 **그 종목의 검증된 상한**(VALIDATED_MARKETS)을 쓴다.
+    '검증됐다'는 것은 그 스프레드에서 §11 을 통과했다는 뜻이므로, 검증값보다 좁은
+    기본 상한을 강요할 이유가 없다.
+
+    ⚠ v3.1(2026-08-13) 이전에는 rsi2 가 **종목과 무관하게** 고정 0.1% 를 썼다. 그래서
+      DOGE(실측 0.102%, §11 통과)가 **0.002%p 차이로** 영구 배제됐다.
+      완화해도 rsi2 의 다른 종목은 영향이 없다 — 상한이 넓은 종목
+      (AVAX·ETC·DOT·ENS·SUI 0.25%)은 전부 STRATEGY_BLACKLIST["rsi2"] 로 이미 막혀 있다.
+    """
+    base = MAX_SPREAD_RATIO if strategy == "rsi2" else max(
         [MAX_SPREAD_RATIO, *WIDE_SPREAD_ALLOWED.values()])
+    if market:
+        sym = market.split("-", 1)[-1]
+        if strategy in STRATEGY_BLACKLIST and sym in STRATEGY_BLACKLIST[strategy]:
+            return base                      # 이 전략에 금지된 종목은 완화하지 않는다
+        return max(base, VALIDATED_MARKETS.get(sym, 0.0))
+    return base
 
 
 def stop_ratio_for(spec: StrategySpec, entry_atr: float, entry_price: float) -> float:

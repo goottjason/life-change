@@ -350,7 +350,8 @@ class Trader:
         # 스크리닝 시점의 스프레드가 최신이 아니다. 넓어졌으면 진입하지 않는다
         # (거래당 기댓값이 0.26% 수준이라 스프레드 0.1%p 차이가 손익을 가른다).
         if C.VERIFY_SPREAD_ON_ENTRY:
-            ok, why = self.screener.tradable_now(market, C.strategy_spread_cap(name))
+            ok, why = self.screener.tradable_now(
+                market, C.strategy_spread_cap(name, market))
             if not ok:
                 self.logger.log("entry_skip", strategy=name, market=market,
                                 reason=f"진입 취소: {why}")
