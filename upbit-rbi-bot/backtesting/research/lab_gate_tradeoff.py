@@ -23,7 +23,9 @@ for gate in (0.002,0.003,0.004,0.005,0.006,0.008,0.010):
                     ta.atr(df).to_numpy(float),df['open'].to_numpy(float))
         cfg=ExitCfg('pct',S.stop_pct,1.0,time_stop_bars=S.time_stop_bars,use_exit_signal=True)
         sp=med.get(s,0.0025)
-        for t in simulate_arrays(pre,cfg,start=2500,end=len(df),slippage=0.0,entry_delay=ENTRY_DELAY):
+        # ⚠ simulate_arrays 는 fee 기본값(C.FEE_ROUNDTRIP)을 이미 뺀다 → fee=0.0 으로 넘겨
+        #   t.pnl 을 진짜 gross 로 만들고, 비용은 아래에서 **한 번만** 뺀다.
+        for t in simulate_arrays(pre,cfg,start=2500,end=len(df),fee=0.0,slippage=0.0,entry_delay=ENTRY_DELAY):
             rows.append({'ts':df.index[t.entry_i],'gross':t.pnl*100,
                          'net':t.pnl*100-(C.FEE_ROUNDTRIP+sp)*100})
         yrs=(df.index[-1]-df.index[2500]).days/365.25

@@ -40,7 +40,7 @@ from backtesting.research.data_cache import load
 from backtesting.research.fastsim import ExitCfg, Precomp, simulate_arrays
 from backtesting.research.lab_screen import ENTRY_DELAY, SLIPPAGE
 
-SPREADS = Path("/tmp/spreads.csv")     # 실시간 측정본 (없으면 charter 값 사용)
+SPREADS = Path("/tmp/spreads_med.csv")   # 봇 실측 중앙값 (api/status 의 spread_stats)
 # ⚠ 라이브 스펙에서 직접 읽는다 (하드코딩 금지 — 어긋나면 결론이 통째로 틀린다)
 from config.charter import STRATEGY_SPECS as _S
 CFG = dict(th=_S["rsi2"].entry_level, gate=_S["rsi2"].min_atr_ratio,
@@ -48,12 +48,23 @@ CFG = dict(th=_S["rsi2"].entry_level, gate=_S["rsi2"].min_atr_ratio,
 
 
 def live_spreads() -> dict[str, float]:
+    """
+    봇이 실측한 스프레드 중앙값. **없으면 멈춘다.**
+
+    ⚠ 2026-08-13: 이 함수가 존재하지 않는 파일(/tmp/spreads.csv)을 보면서 조용히 {} 를
+      돌려주고 있었다. 그러면 아래에서 charter 의 VALIDATED_MARKETS 기본값(0.10%/0.25%)이나
+      NaN 이 쓰이는데, **그 값으로 낸 결론이 15차 '유니버스 확대 불가' 판정의 근거였다.**
+      조용한 폴백은 틀린 결론을 만든다 — 없으면 실패하게 바꿨다.
+    생성: 서버 /api/status 의 spread_stats 중앙값을 market,spread(비율)로 저장.
+    """
     if not SPREADS.exists():
-        return {}
-    out = {}
+        raise SystemExit(f"스프레드 실측 파일 없음: {SPREADS}\n"
+                         "  서버 /api/status 의 spread_stats 로 먼저 생성할 것.")
     with open(SPREADS) as f:
-        for r in csv.DictReader(f):
-            out[r["market"].replace("KRW-", "")] = float(r["spread"])
+        out = {r["market"].replace("KRW-", ""): float(r["spread"])
+               for r in csv.DictReader(f)}
+    if len(out) < 50:
+        raise SystemExit(f"스프레드 실측값이 {len(out)}개뿐 — 파일을 다시 생성할 것.")
     return out
 
 
@@ -74,8 +85,11 @@ def run_symbol(sym: str):
     pre = Precomp(enter, exit_, df["close"].to_numpy(float), df["high"].to_numpy(float),
                   df["low"].to_numpy(float), ta.atr(df).to_numpy(float),
                   df["open"].to_numpy(float))
+    # ★ fee=0.0 · slippage=0.0 이라야 t.pnl 이 진짜 gross 다.
+    #   (fee 기본값은 C.FEE_ROUNDTRIP 이므로 생략하면 수수료가 이미 빠진 값이 나오고,
+    #    아래에서 비용을 또 빼면 **이중 차감**이 된다 — 2026-08-13 에 실제로 그랬다)
     tr = list(simulate_arrays(pre, cfg, start=2500, end=len(df),
-                              slippage=0.0, entry_delay=ENTRY_DELAY))   # ★ 비용 0 = gross
+                              fee=0.0, slippage=0.0, entry_delay=ENTRY_DELAY))
     if len(tr) < 30:
         return None
     pnl = np.array([t.pnl for t in tr]) * 100
@@ -98,8 +112,10 @@ def main() -> None:
         r = run_symbol(s)
         if not r:
             continue
-        spread = sp.get(s, C.VALIDATED_MARKETS.get(s, np.nan))
-        cost = (C.FEE_ROUNDTRIP + (spread if spread == spread else 0.0)) * 100
+        spread = sp.get(s)
+        if spread is None:            # 실측 없는 종목은 판정에서 제외(폴백 금지)
+            continue
+        cost = (C.FEE_ROUNDTRIP + spread) * 100
         r["spread"] = spread
         r["net"] = r["gross"] - cost
         r["breakeven_spread"] = r["gross"] / 100 - C.FEE_ROUNDTRIP   # 이 이하면 흑자
