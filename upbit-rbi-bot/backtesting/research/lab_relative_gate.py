@@ -93,9 +93,13 @@ def run(gate_kind: str, level: float, spd: dict) -> pd.DataFrame:
                       df["open"].to_numpy(float))
         cfg = ExitCfg("pct", S.stop_pct, 1.0, time_stop_bars=S.time_stop_bars,
                       use_exit_signal=True)
+        # ⚠ simulate_arrays 는 기본으로 fee=C.FEE_ROUNDTRIP 를 이미 뺀다.
+        #   여기서 수수료를 또 빼면 **이중 차감**이 되어 거래당 0.1%p 를 잃는다
+        #   (2026-08-13 에 실제로 그랬고, '라이브 설정이 음수'라는 오판으로 이어질 뻔했다).
+        #   → fee=0.0 으로 넘기고 비용을 여기서 **한 번만** 뺀다.
         cost = (C.FEE_ROUNDTRIP + spd.get(s, 0.0025)) * 100
         for t in simulate_arrays(pre, cfg, start=2500, end=len(df),
-                                 slippage=0.0, entry_delay=ENTRY_DELAY):
+                                 fee=0.0, slippage=0.0, entry_delay=ENTRY_DELAY):
             rows.append({"ts": df.index[t.entry_i], "sym": s,
                          "gross": t.pnl * 100, "net": t.pnl * 100 - cost})
         yrs = (df.index[-1] - df.index[2500]).days / 365.25
