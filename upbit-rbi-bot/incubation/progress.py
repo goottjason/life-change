@@ -35,6 +35,16 @@ BACKTEST = {
 TARGET_TRADES = 100          # §11 표본 기준
 MIN_JUDGE_TRADES = 30        # 이 미만이면 성적을 판정하지 않는다(표본 부족)
 SLIPPAGE_ALERT = 0.25        # 왕복 실효 슬리피지 경보선(%) — 넘으면 엣지 소멸
+
+# ── 무거래 공백 임계값 (2026-08-13 실측으로 재설정) ────────────────
+# rsi2 는 변동성 게이트가 각 종목 ATR 분포의 **95~99 백분위**에 있어서 **몰아서 거래하고
+# 조용한 국면엔 몇 주씩 쉰다**. 2년 실측 거래 간격 분포:
+#     중앙 0.1일 · 90% 3.6일 · 95% 17.0일 · 99% 38.8일 · **최대 104일**
+#     11일 이상 공백이 2년간 16회.
+# 이전에 쓰던 "30일 0건이면 경보"는 오발이다(30일+ 공백이 2년간 6회 = 연 3회).
+# ⚠ 포아송(균일 발생)으로 확률을 계산하면 안 된다 — 실제 분포는 두꺼운 꼬리다.
+GAP_INFO_DAYS = 14           # 이 이상이면 안내 (실측 상위 5.4%)
+GAP_ALERT_DAYS = 45          # 이 이상이면 점검 권고 (실측 상위 0.8%)
 EXP_FLOOR_RATIO = 0.0        # 실전 거래당 기댓값이 이 값 미만이면 경고
 
 
@@ -229,13 +239,14 @@ def report(db_path: str | None = None, since: str | None = None) -> dict:
         notes.append(f"ℹ️ 기준 시각({start[:16].replace('T',' ')}) **이전에 진입한** {prior}건은 "
                      f"세지 않습니다 — 검증되지 않은 설정으로 산 거래라 조건이 다릅니다.")
     act = activity(db_path)
-    # 최근 30일 진입이 0건이면 '조용한 국면'이 아니라 점검 대상이다
-    if act.get("n30") == 0 and act.get("days_since") is not None:
-        notes.append(f"🚨 최근 30일 진입 0건 (마지막 진입 {act['days_since']:.0f}일 전) "
-                     f"— 신호 조건·유니버스·서킷을 점검할 것.")
-    elif act.get("days_since") is not None and act["days_since"] >= 7:
-        notes.append(f"ℹ️ 마지막 진입이 {act['days_since']:.0f}일 전입니다. "
-                     f"최근 30일 {act['n30']}건 · 90일 {act['n90']}건 — 빈도가 낮은 국면입니다.")
+    gap = act.get("days_since")
+    if gap is not None and gap >= GAP_ALERT_DAYS:
+        notes.append(f"🚨 마지막 진입이 {gap:.0f}일 전 — 실측 분포의 상위 1% 밖입니다. "
+                     f"신호 조건·유니버스·서킷을 점검할 것.")
+    elif gap is not None and gap >= GAP_INFO_DAYS:
+        notes.append(f"ℹ️ 마지막 진입이 {gap:.0f}일 전입니다. 이 전략은 **몰아서 거래하고 "
+                     f"조용한 국면엔 몇 주씩 쉽니다**(실측 간격 중앙 0.1일·95% 17일·최대 104일). "
+                     f"{GAP_ALERT_DAYS}일을 넘기면 점검 대상입니다.")
     return {"verdict": head, "notes": notes, "overall": overall, "per_strategy": per,
             "target": TARGET_TRADES, "backtest": BACKTEST, "since": start,
             "excluded_prior": prior, "activity": act}
@@ -252,8 +263,10 @@ def format_text(rep: dict) -> str:
             lines.append(f"마지막 진입  {a['last_entry'][:16].replace('T', ' ')} "
                          f"({a['days_since']:.0f}일 전)")
             lines.append(f"진입 건수    최근 7일 {a['n7']} · 30일 {a['n30']} · 90일 {a['n90']}")
-        lines.append("※ 기대 빈도는 유니버스·변동성 게이트에 따라 크게 달라집니다. "
-                     "위 '진입 건수'가 실제 상태입니다.")
+        lines.append("")
+        lines.append("※ 이 전략은 **변동성이 높을 때 몰아서 거래하고 조용하면 쉽니다**.")
+        lines.append("   실측 거래 간격: 중앙 0.1일 · 95% 17일 · 99% 39일 · 최대 104일")
+        lines.append(f"   → {GAP_ALERT_DAYS}일까지는 정상 범위입니다. 넘기면 점검하세요.")
         return "\n".join(lines)
     lines = [f"📊 rsi2 인큐베이션 리포트 — {rep['verdict']}", ""]
     bar_n = min(20, int(o["n"] / rep["target"] * 20))

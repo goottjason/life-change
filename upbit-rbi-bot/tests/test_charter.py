@@ -287,4 +287,16 @@ def test_activity_reports_facts_not_stale_expectations(tmp_path):
                 ((now - timedelta(days=45)).isoformat(timespec="minutes"),))
     con.commit(); con.close()
     rep = P.report(str(db2))
-    assert any("최근 30일 진입 0건" in n for n in rep["notes"])
+    assert any(str(P.GAP_ALERT_DAYS) in n or "점검" in n for n in rep["notes"]), rep["notes"]
+
+
+def test_gap_thresholds_match_measured_distribution():
+    """
+    ★ 2026-08-13 — 무거래 공백 임계값은 **실측 간격 분포**에서 나와야 한다.
+    rsi2 는 몰아서 거래하는 전략이라 2년간 11일+ 공백이 16회, 최대 104일이었다.
+    포아송으로 계산하면 11일 공백이 1.4% 로 나와 '고장'으로 오판한다(실제는 상위 6.2%).
+    """
+    from incubation import progress as P
+    assert P.GAP_INFO_DAYS >= 14, "실측 95분위(17일)보다 낮으면 상시 안내가 뜬다"
+    assert P.GAP_ALERT_DAYS >= 39, "실측 99분위(38.8일) 이상이어야 오발하지 않는다"
+    assert P.GAP_ALERT_DAYS > P.GAP_INFO_DAYS
