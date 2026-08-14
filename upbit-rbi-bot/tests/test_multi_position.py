@@ -199,14 +199,14 @@ def test_can_enter_without_strategy_is_global_only():
 
 
 # ── v4.0: breakout 가동 연결 + 진입 컨텍스트 저장 ────────────────
-def breakout_df(bars=60, tf="5min", price=10_000.0):
+def breakout_df(bars=310, tf="5min", price=10_000.0):
     """직전 구간 평평 → 마지막 봉이 고가 돌파 + 거래량 급증."""
     idx = pd.date_range("2026-07-01", periods=bars, freq=tf)
     c = pd.Series(np.full(bars, price), index=idx)
     c.iloc[-1] = price * 1.01
     high = c * 1.0
     vol = pd.Series(100.0, index=idx)
-    vol.iloc[-1] = 300.0
+    vol.iloc[-1] = 600.0   # 평균 100의 6배 (> vol_mult 5.0)
     return pd.DataFrame({"open": c, "high": high, "low": c * 0.998, "close": c,
                          "volume": vol})
 

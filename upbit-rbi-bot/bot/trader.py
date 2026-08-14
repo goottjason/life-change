@@ -194,13 +194,22 @@ class Trader:
             self.failsafe.on_api_error(e)
 
         # 가동 전략이 쓰는 타임프레임을 모아 종목별로 한 번씩 조회한다 (v1.4: 5분+15분 병행)
+        # v4.0: breakout_bars=288 은 기본 200봉을 넘으므로, 그 타임프레임을 쓰는 전략들이
+        # 요구하는 최대 봉 수만큼 받는다(+16 = ATR 워밍업 여유). pyupbit 는 count>200 을
+        # 내부 페이지네이션으로 처리한다 — 5분봉이 마켓당 2요청이 되지만 호출이 직렬이라
+        # 레이트리밋과 무관하고 tick 주기만 소폭 늘어난다(§3.2-j 분석과 동일한 산술).
         timeframes = sorted({s.spec.timeframe for s in self.strategies.values()})
+        counts = {tf: max(200, *(s.spec.breakout_bars + 16
+                                 for s in self.strategies.values()
+                                 if s.spec.timeframe == tf))
+                  for tf in timeframes}
         seen: set[str] = set()
         for market in self.screener.eligible():
             frames: dict[str, pd.DataFrame] = {}
             for tf in timeframes:
                 try:
-                    frames[tf] = self.client.get_candles(market, interval=tf)
+                    frames[tf] = self.client.get_candles(market, interval=tf,
+                                                         count=counts[tf])
                 except Exception as e:
                     self.failsafe.on_api_error(e)
             if not frames:

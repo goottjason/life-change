@@ -427,20 +427,26 @@ STRATEGY_SPECS: dict[str, StrategySpec] = {
                                   timeframe="minute15", always_active=True, time_stop_bars=48,
                                   use_dead_extras=False, partial_tp_ratio=0.5),
     # breakout (v4.0 실험 트랙, §3.5) — **§11 검증 없이 가동한다** (운영자 결정, 스펙 §0 비목적).
-    # "조용히 있다가 움직이기 시작하는 순간 올라타서, 움직임이 끝나면 바로 내린다":
-    # 직전 20봉(5분×20=100분) 최고가를 종가가 돌파 + 거래량 1.5배 확인 → 진입.
-    # 청산은 전부 가격 기반: 트레일링(고점−1.5×진입ATR) · 고정손절 백스톱(1×ATR, 하한 1%) ·
+    # "지난 24시간 최고가를 거래량 급증과 함께 돌파하는 순간 올라타서, 꺾이면 바로 내린다":
+    # 직전 288봉(5분×288=24시간) 최고가를 종가가 돌파 + 거래량 5배 확인 → 진입.
+    # 청산은 전부 가격 기반: 트레일링(고점−2×진입ATR) · 고정손절 백스톱(1×ATR, 하한 1%) ·
     # 시간손절 12봉(단 +0.3% 이상 수익 중이면 유예 — 트레일링이 마무리).
     # rr=0.0: 고정 익절이 없다(트레일링이 대체). Position 이 trail_atr_mult>0 이면 비율 익절을
     # 건너뛴다. 변동성 게이트·추세 필터는 **판단에 쓰지 않고 기록만 한다**(주간 코호트가 재판단).
-    # ⚠ 과거 연구(14차 H4)에서 돌파 계열 롱은 유의하게 음수였다. 이 트랙의 산출물은 수익이
-    #   아니라 "어떤 조건의 돌파가 손실인가"의 실거래 데이터다. 주문은 EXPERIMENT_MAX_ORDER_KRW
-    #   (10,000원)로 강제 제한된다. 시작값 근거: lab_breakout.py 캘리브레이션(2026-08-14).
+    #
+    # 시작값 근거 — lab_breakout.py 캘리브레이션 (2026-08-14, 2년·10종목·비용=수수료+스프레드):
+    #   짧은 룩백(12~36봉)은 하루 25~91건 · net −0.24~−0.27%(비용이 지배, gross 음수).
+    #   n=288 에서 gross 가 양수로 돌아서고 빈도가 목표 대역(하루 3~10건)에 들어온다:
+    #     n=288 · vol 5.0 · trail 2.0 → 하루 4.9건 · 승률 28.9% · net −0.189%/거래
+    #     → 건당 1만원 기준 월 예상 수업료 약 −2,772원 (운영자 승인 예정 수치)
+    # ⚠ 과거 연구(14차 H4)에서 돌파 계열 롱은 유의하게 음수였고 이 시작값도 net 음수다.
+    #   이 트랙의 산출물은 수익이 아니라 "어떤 조건의 돌파가 손실인가"의 실거래 데이터다.
+    #   주문은 EXPERIMENT_MAX_ORDER_KRW(10,000원)로 강제 제한된다.
     "breakout": StrategySpec("breakout", atr_stop_mult=1.0, rr=0.0, regime=Regime.TREND,
                              min_atr_ratio=0.0, time_stop_bars=12,
                              use_dead_extras=False, always_active=True,
                              timeframe="minute5",
-                             breakout_bars=20, vol_mult=1.5, trail_atr_mult=1.5,
+                             breakout_bars=288, vol_mult=5.0, trail_atr_mult=2.0,
                              time_stop_min_profit=0.003),
 }
 
