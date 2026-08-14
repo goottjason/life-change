@@ -136,6 +136,18 @@ class Position:
         깨지는 지점에서, 익절은 직전 고점에서 절반. 없으면 기존 ATR 비율 청산 그대로다.
         손절을 먼저 본다: 같은 tick 에 둘 다 걸리면 살아남는 쪽이 우선이다.
         """
+        # ── 트레일링 스톱 (v4.0, 실험 트랙) — 고정 익절 없이 고점을 따라간다 ──
+        # 청산선 = max(고점 − trail×진입ATR, 고정손절 백스톱). 진입 직후엔 고점=진입가라서
+        # 트레일이 곧 초기 손절이 된다(공격적 설계 — 스펙 §2). 수익 중 이탈이면 take_profit,
+        # 손실 이탈이면 stop_loss 로 구분해 기록한다(주간 코호트 분석이 이 구분을 쓴다).
+        if self.spec.trail_atr_mult > 0 and self.entry_atr > 0:
+            trail = self.highest_price - self.spec.trail_atr_mult * self.entry_atr
+            hard = self.entry_price * (1 - self.sl_ratio)
+            if price <= max(trail, hard):
+                return (ExitReason.STOP_LOSS if price < self.entry_price
+                        else ExitReason.TAKE_PROFIT)
+            return ExitReason.NONE
+
         stop = self.effective_stop_price
         if stop is not None:
             # 강의(원저자, 2025.09): "손절은 복마감(봉마감)을 보고 한다."

@@ -25,6 +25,13 @@ def is_dead(pos: Position, df: pd.DataFrame) -> tuple[bool, str]:
 
     # ① 시간 손절: N봉 경과 & TP·SL 미도달 (메인 기준)
     if bars_held >= time_stop:
+        # v4.0: 수익 유예 — 시간이 다 됐어도 time_stop_min_profit 이상 수익 중이면 청산하지
+        # 않는다(트레일링 스톱이 마무리한다). 수익이 그 밑으로 내려오면 다음 판정에서 시간손절.
+        minp = pos.spec.time_stop_min_profit
+        if minp is not None and len(df):
+            price = float(df["close"].iloc[-1])
+            if (price - pos.entry_price) / pos.entry_price >= minp:
+                return False, ""
         return True, f"time_stop {bars_held}>={time_stop} bars"
 
     # 부가 규칙(②③④)은 백테스트로 검증된 전략에만 선택적으로 적용한다 (v1.3).
