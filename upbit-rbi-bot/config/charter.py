@@ -10,32 +10,26 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
-CHARTER_VERSION = "v3.1"
+CHARTER_VERSION = "v4.0"
 
 # ── 자본·수수료 (헌장 §1, §13) ────────────────────────────────
 # 자본은 더 이상 고정값이 아니라 '실계좌 잔고(총 자산)'를 런타임에 읽어서 쓴다 (헌장 v1.1 §7.1).
 # 아래 값은 DRY_RUN(모의) 및 계좌 조회 실패 시의 폴백 기본값일 뿐이다.
 DEFAULT_CAPITAL_KRW = 90_000        # 폴백 기본 자본 (실전에선 계좌 잔고로 대체됨)
-ALLOC_PER_STRATEGY_RATIO = 1.0      # 전략당 배분 (§7.1). 동시보유 1 이므로 자본 전액.
-                                    # ⚠ MAX_CONCURRENT_POSITIONS 와 반드시 함께 움직여야 한다
-                                    #   (배분 × 동시보유 > 1 이면 자본을 초과 배정하게 된다)
+ALLOC_PER_STRATEGY_RATIO = 2 / 3    # 검증 트랙 배분 상한 (§7.1, v4.0). 실험 예산(3×10,000원)
+                                    # 침범 방지. ⚠ 실효 리스크 = min(f, 배분×손절거리)
+                                    # = min(2.4%, 0.667×2.5%) ≈ **1.67%** — f 2.4% 가 온전히
+                                    # 실리지 않음을 알고 감수한다. 두 트랙이 한 계좌를 공유하는
+                                    # 대가다 (스펙 2026-08-14 §1, 운영자 승인).
+                                    # 검증트랙 배분×동시보유 + 실험예산 ≤ 자본 (test_charter 가 강제)
 FEE_ROUNDTRIP = 0.001               # 왕복 수수료 0.1% (0.05% × 2) (§6, 업비트 KRW)
 MIN_ORDER_KRW = 5_000               # 업비트 최소주문금액 (§6.5)
 
-# ── 리스크·서킷 브레이커 (헌장 §5, v3.0 재설계 2026-08-06) ────
-# 근거: backtesting/research/lab_kelly.py(11차) · lab_circuit.py(13차)
-#
-# ★ 설계 원칙 — **서킷은 R 배수로 정의한다.**
-#   R = 1거래 리스크 단위(= RISK_PER_TRADE_RATIO). 서킷을 절대 %로 박아두면 f 를 바꿀 때마다
-#   서로 어긋난다(f=1% 기준으로 정해둔 값에 f=2.4% 를 넣으면 손절 1.25번에 하루가 끝난다).
-#   R 로 정의하면 f 를 바꿔도 **오발률이 그대로 유지**된다.
-#
-# ★ 임계값은 '오발률'로 정했다 — 백테스트 수익으로 튜닝하지 않았다(그건 과최적화다).
-#   rsi2 5분봉 2,294거래 실측 분포에서:
-#     일일 5R  → 정상 작동 중 연 2.1회 발동 (3R 은 연 4.2회로 잦다)
-#     12연패   → 연 3.7회 (현행 5연패는 **연 28.7회** — 사실상 상시 발동이었다)
-#     MDD 30% → 살아있는 엣지에서 25.7% 발동 / 죽은 엣지에서 93.7% 발동 = 분리력 최대
-#               (현행 15% 는 **살아있을 때도 98.7% 발동** — 안전장치가 아니라 타이머였다)
+# ── 리스크·서킷 브레이커 (헌장 §5, v4.0 절대값 전환 2026-08-14) ────
+# v3.0 은 서킷을 R 배수로 정의했다(lab_circuit.py 13차 — f 를 바꿔도 오발률 유지).
+# v4.0 에서 실험 트랙(고정금액 사이징)이 생기며 R 정의가 계좌 전체에 성립하지 않아
+# **절대 %** 로 전환했다. 값은 운영자가 학습 지속성 기준으로 직접 골랐다(아래).
+# 12연패 차단의 오발률 근거(13차: 연 3.7회)는 rsi2 단독 기준 — breakout 합산 시 재측정 대상.
 RISK_PER_TRADE_RATIO = 0.024        # 1거래 최대손실 = 자본 2.4% (§5.1) = 1R
 # ── f = 2.4% 채택 (2026-08-06, 운영자 결정) ───────────────────
 #   근거: lab_kelly.py — 켈리 f* = 11.61%(동시보유 3 반영). 2.4% 는 그 **1/4.8** 로
@@ -43,33 +37,32 @@ RISK_PER_TRADE_RATIO = 0.024        # 1거래 최대손실 = 자본 2.4% (§5.1)
 #       f=1.0%  연 +27.8% · 중앙 MDD 11.1% · 반토막 0.0%
 #       f=2.4%  연 **+74.1%** · 중앙 MDD **25.4%** · 반토막 **0.0%**   ← 채택
 #       f=2.9%  연 +92.7% · 중앙 MDD 30.2% · 반토막 0.5%
-#   서킷은 R 단위라 자동으로 따라온다: 일일한도 12.0% · MDD 정지 30.0%.
-#   MDD 정지 30.0% 는 13차의 분리 최적점(살아있는 엣지 25.7% 발동 / 죽은 엣지 93.7%)과
-#   정확히 일치하고, 이 f 의 중앙 MDD(25.4%)보다 위에 있다 — 설계대로 맞물린다.
+#   (v4.0: 서킷은 더 이상 f 를 따라오지 않는다 — 절대값 §5 블록 참조.)
 #
 # ⚠ **감수하는 것**: 인큐베이션 100건으로 실전 엣지가 아직 확인되지 않았다.
 #   실전 엣지가 백테스트보다 작으면 손실도 2.4배가 된다. 운영자가 이를 알고 선택했다.
 #   되돌리려면 이 한 줄만 0.01 로 바꾸면 서킷도 함께 되돌아온다.
-DAILY_LOSS_LIMIT_R = 5.0            # 일일 손실 한도 = 5R (§5.2)
-MAX_CONSECUTIVE_LOSSES = 12         # 연속 손절 차단 (§5.3). 5 → 12 (오발 연 28.7회 → 3.7회)
-MAX_DRAWDOWN_R_MULT = 12.5          # MDD 전면정지 = 12.5R (§5.4). f=1% → 12.5%, f=2.4% → 31%
-MAX_CONCURRENT_POSITIONS = 1        # 동시 최대 포지션 (§3.4, §5.5). f 와 곱해 '총 위험'이 된다
-# ★ 3 → 1 로 줄인 이유 (2026-08-06) — **이걸 안 바꾸면 f 를 올려도 아무 효과가 없다.**
-#   포지션 크기 = min(자본×f/손절거리, 자본×ALLOC_PER_STRATEGY_RATIO) 이므로
-#   **실효 리스크 = min(f, 배분상한 × 손절거리)** 다.
-#   배분 33.3% × 손절 2.5% = 0.83% 이어서, f=1% 든 2.4% 든 실효는 **0.83% 로 동일**했다.
-#   (즉 이 계좌는 그동안 f=1% 가 아니라 0.83% 로 돌고 있었다.)
-#   업비트 현물은 레버리지가 없으므로 f 를 올리는 유일한 방법은 포지션을 집중하는 것이다:
-#       동시보유 3(배분 33%) → 실효 f 0.83% · 연 +22.8% · 중앙 MDD  9.3%
-#       동시보유 2(배분 50%) → 실효 f 1.25% · 연 +35.0% · 중앙 MDD 11.5%
-#       동시보유 1(배분100%) → 실효 f 2.40% · 연 +57.5% · 중앙 MDD 18.7%  ← 채택
-#   대가: 분산이 사라진다(한 번에 한 종목). 거래 수는 연 609 → 503 건으로 17% 감소.
-#   되돌리려면 이 값과 ALLOC_PER_STRATEGY_RATIO 를 함께 되돌린다.
+# ── 서킷 (v4.0, 운영자 결정 2026-08-14): R 단위 → **절대 %** ─────────
+# v3.0 은 서킷을 R(=f 배수)로 정의했다. 그러나 v4.0 부터 두 트랙(검증 f 기반 사이징 +
+# 실험 고정금액 사이징)이 한 계좌를 공유하므로 R 정의가 성립하지 않는다.
+# 값은 운영자가 직접 골랐다: "천천히 잃으면서 배우는 것과 하루에 다 잃는 것은
+# 배움의 양이 다르다." (일 −5% ≈ 하루 최대 약 4,500원, MDD −50% = 시드 절반 보전)
+DAILY_LOSS_LIMIT_RATIO = 0.05       # 일일 손실 한도 −5% (§5.2). 당일 신규 진입 정지
+MAX_DRAWDOWN_RATIO = 0.50           # 고점 대비 −50% 전면 정지 (§5.4). 재가동은 수동
+MAX_CONSECUTIVE_LOSSES = 12         # 연속 손절 차단 (§5.3, v3.0 값 유지. 일 경계 자동 해제)
+# ⚠ 12연패 차단은 두 트랙 **합산**이다. breakout 은 승률이 낮고 드문 큰 승리로 버는
+#   구조라 12연패가 월 1~2회 나올 수 있다 — 발동 빈도를 주간 리포트로 관찰하고,
+#   잦으면 트랙별 분리를 다음 개정에서 검토한다 (스펙 §3).
 
-# 파생값 — 코드가 쓰는 실제 비율. f 를 바꾸면 전부 따라 움직인다.
-DAILY_LOSS_LIMIT_RATIO = DAILY_LOSS_LIMIT_R * RISK_PER_TRADE_RATIO      # 1% → 5%
-MAX_DRAWDOWN_RATIO = MAX_DRAWDOWN_R_MULT * RISK_PER_TRADE_RATIO         # 1% → 12.5%
-TOTAL_HEAT_RATIO = RISK_PER_TRADE_RATIO * MAX_CONCURRENT_POSITIONS      # 동시 최대 위험
+# ── 트랙별 동시 포지션 (§5.5, v4.0) ──────────────────────────
+MAX_POSITIONS_VALIDATED = 1         # 검증 트랙 (v3.0 의 MAX_CONCURRENT_POSITIONS=1 승계.
+                                    # 1 로 줄인 근거는 2026-08-06 실효 리스크 분석 — git 이력 참조)
+MAX_POSITIONS_EXPERIMENTAL = 3      # 실험 트랙 (예산 = 3 × EXPERIMENT_MAX_ORDER_KRW)
+MAX_CONCURRENT_POSITIONS = MAX_POSITIONS_VALIDATED + MAX_POSITIONS_EXPERIMENTAL
+
+# 검증 트랙 동시 최대 위험. 실험 트랙 히트는 f 가 아니라 주문 상한으로 바운드된다
+# (3 × 10,000원 × 손절거리 ≈ 자본의 0.5% 수준 — f 사이징이 아니므로 여기 안 넣는다).
+TOTAL_HEAT_RATIO = RISK_PER_TRADE_RATIO * MAX_POSITIONS_VALIDATED
 
 # ── 봉·시간 손절 (헌장 §1, §4-A) ─────────────────────────────
 BASE_TIMEFRAME = "minute5"          # 기준 봉 (pyupbit interval)
@@ -356,6 +349,11 @@ class StrategySpec:
     # 상위 타임프레임 추세 상승을 요구할지. 원문의 페이크아웃 예시는 **하락 채널 하단**이라
     # 추세를 요구하면 원문 취지와 어긋날 수 있다 → 백테스트로 확인할 축으로 둔다.
     require_trend: bool = True
+    # ── v4.0: 돌파(실험 트랙) 파라미터. 기본값(0/None)은 기존 전략의 동작을 바꾸지 않는다 ──
+    breakout_bars: int = 0            # 직전 N봉 최고가 돌파 진입. 0 = 미사용
+    vol_mult: float = 0.0             # 거래량 확인: 현재봉 ≥ 직전 N봉 평균 × 이 값. 0 = 끔
+    trail_atr_mult: float = 0.0       # 트레일링 스톱: 고점 − 이 값×진입ATR. 0 = 미사용
+    time_stop_min_profit: float | None = None  # 시간손절 시 이 수익률 이상이면 청산 유예
 
     @property
     def risk_reward(self) -> float:
@@ -427,7 +425,23 @@ STRATEGY_SPECS: dict[str, StrategySpec] = {
     #   되살리려면 backtesting/research/README.md 의 그 표를 먼저 뒤집어야 한다.
     "easy_teaching": StrategySpec("easy_teaching", atr_stop_mult=1.5, rr=1.5, regime=Regime.RANGE,
                                   timeframe="minute15", always_active=True, time_stop_bars=48,
-                                  use_dead_extras=False, partial_tp_ratio=0.5)
+                                  use_dead_extras=False, partial_tp_ratio=0.5),
+    # breakout (v4.0 실험 트랙, §3.5) — **§11 검증 없이 가동한다** (운영자 결정, 스펙 §0 비목적).
+    # "조용히 있다가 움직이기 시작하는 순간 올라타서, 움직임이 끝나면 바로 내린다":
+    # 직전 20봉(5분×20=100분) 최고가를 종가가 돌파 + 거래량 1.5배 확인 → 진입.
+    # 청산은 전부 가격 기반: 트레일링(고점−1.5×진입ATR) · 고정손절 백스톱(1×ATR, 하한 1%) ·
+    # 시간손절 12봉(단 +0.3% 이상 수익 중이면 유예 — 트레일링이 마무리).
+    # rr=0.0: 고정 익절이 없다(트레일링이 대체). Position 이 trail_atr_mult>0 이면 비율 익절을
+    # 건너뛴다. 변동성 게이트·추세 필터는 **판단에 쓰지 않고 기록만 한다**(주간 코호트가 재판단).
+    # ⚠ 과거 연구(14차 H4)에서 돌파 계열 롱은 유의하게 음수였다. 이 트랙의 산출물은 수익이
+    #   아니라 "어떤 조건의 돌파가 손실인가"의 실거래 데이터다. 주문은 EXPERIMENT_MAX_ORDER_KRW
+    #   (10,000원)로 강제 제한된다. 시작값 근거: lab_breakout.py 캘리브레이션(2026-08-14).
+    "breakout": StrategySpec("breakout", atr_stop_mult=1.0, rr=0.0, regime=Regime.TREND,
+                             min_atr_ratio=0.0, time_stop_bars=12,
+                             use_dead_extras=False, always_active=True,
+                             timeframe="minute5",
+                             breakout_bars=20, vol_mult=1.5, trail_atr_mult=1.5,
+                             time_stop_min_profit=0.003),
 }
 
 # 가동 전략 (v1.4) — macd/rsi/cvd 는 장기·walk-forward·국면분해에서 모두 음의 기댓값으로
@@ -442,7 +456,8 @@ STRATEGY_SPECS: dict[str, StrategySpec] = {
 #   배경: §11 백테스트 0건·인큐베이션 생략으로 실계좌 투입됐고, ACTIVE_STRATEGIES 를 바꾸면서
 #   CHARTER_VERSION 을 올리지 않아 §9.7 승인 게이트도 통과했다(→ charter_fingerprint 로 수정).
 #   복귀 조건: §11 통과(승률>55%·PF>1.5·MDD<20%·100거래+) → 5,000원 인큐베이션 2~4주.
-ACTIVE_STRATEGIES: tuple[str, ...] = ("rsi2", "rsi2_15m")
+# breakout 은 v4.0 실험 트랙(EXPERIMENTAL) — §11 미통과 상태로 가동하되 주문 상한이 강제된다.
+ACTIVE_STRATEGIES: tuple[str, ...] = ("rsi2", "rsi2_15m", "breakout")
 
 
 # ── §11 검증 단계 (v2.7) ─────────────────────────────────────
@@ -467,10 +482,28 @@ VALIDATED_STRATEGIES: frozenset[str] = frozenset({"rsi2", "rsi2_15m"})
 INCUBATION_START = "2026-08-04T16:15:00+09:00"
 INCUBATING_STRATEGIES: frozenset[str] = frozenset()
 
+# ── 실험 트랙 (§3.5, v4.0. 스펙 docs/superpowers/specs/2026-08-14-…) ──
+# EXPERIMENTAL — §11 검증 **없이** 가동할 수 있는 공식 실험 차선. 대신 주문금액 상한을
+# 코드로 강제한다. easy_teaching 사고(검증 0건 전략이 자본 1/3 로 실계좌 진입)의 재발
+# 방지 장치를 유지하면서 "작게는 실험해도 된다"를 규칙으로 만든 것이다.
+# 이 트랙의 1차 산출물은 수익이 아니라 **튜닝 데이터**다(진입 컨텍스트 전수 기록 → 주간
+# 코호트 리포트). 운영자 의도: "자주 거래하며 그 안에서 문제점을 튜닝하며 다듬어간다."
+EXPERIMENTAL_STRATEGIES: frozenset[str] = frozenset({"breakout"})
+EXPERIMENT_MAX_ORDER_KRW = 10_000   # 실험 트랙 건당 주문 상한 (지문 포함 — 승인 대상)
+
+
+def track_of(strategy: str) -> str:
+    """전략 → 트랙. 모르는 전략(오펀 복구 등)은 보수적으로 검증 트랙 취급(더 좁은 한도)."""
+    return "experimental" if strategy in EXPERIMENTAL_STRATEGIES else "validated"
+
 
 def position_cap_for(strategy: str, krw: float) -> float:
-    """인큐베이션 중인 전략은 최소주문금액으로 묶는다 (§11-3)."""
-    return min(krw, float(MIN_ORDER_KRW)) if strategy in INCUBATING_STRATEGIES else krw
+    """인큐베이션은 최소주문금액(§11-3), 실험 트랙은 EXPERIMENT_MAX_ORDER_KRW(v4.0)로 묶는다."""
+    if strategy in INCUBATING_STRATEGIES:
+        return min(krw, float(MIN_ORDER_KRW))
+    if strategy in EXPERIMENTAL_STRATEGIES:
+        return min(krw, float(EXPERIMENT_MAX_ORDER_KRW))
+    return krw
 
 
 # ── 실거래 승인 지문 (§9.7, v2.7) ────────────────────────────
@@ -500,14 +533,18 @@ def charter_fingerprint() -> str:
     # §5 리스크·서킷 — 자본을 직접 위험에 노출시키는 값들이므로 승인 대상이다
     parts.append("risk(" + ",".join([
         f"f={RISK_PER_TRADE_RATIO!r}",
-        f"daily={DAILY_LOSS_LIMIT_R!r}R",
+        f"daily={DAILY_LOSS_LIMIT_RATIO!r}",       # v4.0: R 배수 → 절대값
         f"streak={MAX_CONSECUTIVE_LOSSES!r}",
-        f"mdd={MAX_DRAWDOWN_R_MULT!r}R",
+        f"mdd={MAX_DRAWDOWN_RATIO!r}",             # v4.0: R 배수 → 절대값
         f"maxpos={MAX_CONCURRENT_POSITIONS!r}",
         # ★ 배분비율은 **실효 리스크를 직접 결정**한다(실효 f = min(f, 배분×손절거리)).
         #   2026-08-06 에 이걸로 데인 적이 있다 — f 를 2.4배 올렸는데 배분상한이 먼저 걸려
         #   실효는 0.83% 그대로였다. 승인 대상에서 빠지면 같은 일이 조용히 반복된다.
         f"alloc={ALLOC_PER_STRATEGY_RATIO!r}",
+        # v4.0 실험 트랙 — 주문 상한·트랙별 동시보유도 실계좌 노출을 직접 결정한다
+        f"exp_cap={EXPERIMENT_MAX_ORDER_KRW!r}",
+        f"maxpos_v={MAX_POSITIONS_VALIDATED!r}",
+        f"maxpos_e={MAX_POSITIONS_EXPERIMENTAL!r}",
     ]) + ")")
     # ★ 거래 대상 유니버스도 승인 대상이다 (v3.1, 2026-08-13).
     #   종목을 추가하거나 스프레드 상한을 바꾸면 **실제로 무엇을 사는지**가 달라진다.

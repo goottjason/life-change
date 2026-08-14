@@ -152,7 +152,9 @@ def test_헌장_풀_확대값():
     # 후보 스캔: 하한을 넘는 전 종목 확인 (top_n×20 ≥ KRW 270) — v2.0
     assert C.UNIVERSE_TOP_N * C.SPREAD_CANDIDATE_MULT >= 270
     assert C.VERIFY_SPREAD_ON_ENTRY is True
-    # 풀이 커져도 리스크 노출은 자본이 제한한다 — 동시보유 × 전략당 배분이 자본을 못 넘는다
-    # (v3.0: 동시보유 3→1, 배분 1/3→1.0. 값 자체가 아니라 **불변식**을 검증한다)
+    # 풀이 커져도 리스크 노출은 자본이 제한한다 — 트랙별 배정 합이 자본을 못 넘는다
+    # (v4.0: 검증 트랙 배분 2/3×1 + 실험 트랙 예산 3×10,000원/90,000원 = 1.0)
     assert C.MAX_CONCURRENT_POSITIONS >= 1
-    assert C.ALLOC_PER_STRATEGY_RATIO * C.MAX_CONCURRENT_POSITIONS <= 1.0 + 1e-9
+    assert (C.ALLOC_PER_STRATEGY_RATIO * C.MAX_POSITIONS_VALIDATED
+            + C.MAX_POSITIONS_EXPERIMENTAL * C.EXPERIMENT_MAX_ORDER_KRW
+            / C.DEFAULT_CAPITAL_KRW) <= 1.0 + 1e-9

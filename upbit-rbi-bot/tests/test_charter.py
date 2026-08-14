@@ -23,26 +23,35 @@ def test_position_size_matches_stop_loss():
             assert abs(size * stop - CAP * C.RISK_PER_TRADE_RATIO) < 1
 
 
-def test_effective_risk_is_not_silently_capped():
+def test_effective_risk_matches_documented_cap():
     """
-    ★ 2026-08-06 회귀 — **실효 리스크 = min(f, 배분상한 × 손절거리)** 다.
+    ★ 2026-08-06 교훈 — **실효 리스크 = min(f, 배분상한 × 손절거리)** 다.
     배분상한이 먼저 걸리면 `RISK_PER_TRADE_RATIO` 를 올려도 아무 효과가 없다.
-    실제로 그런 상태였다: 배분 33.3% × 손절 2.5% = 0.83% 여서 f=1% 든 2.4% 든 실효는 0.83%.
-    가동 전략의 손절거리에서 실효 f 가 명목 f 의 90% 이상이어야 한다.
+
+    v4.0 개정: 실험 예산(3×10,000원) 확보를 위해 배분을 2/3 로 **의도적으로** 캡했다
+    (스펙 docs/superpowers/specs/2026-08-14-…, 운영자 승인). 따라서 "실효 f ≈ 명목 f" 를
+    강제하던 이전 단언은 폐기하고, 실효 f 가 **문서화된 값(min 공식)과 일치**하는지 검증한다.
+    조용히 어긋나는 것을 막는 게 목적이지, 캡 자체를 금지하는 게 아니다.
     """
     for name in C.ACTIVE_STRATEGIES:
+        if name in C.EXPERIMENTAL_STRATEGIES:
+            continue        # 실험 트랙은 f 사이징이 아니라 고정 상한(position_cap_for)을 쓴다
         spec = C.STRATEGY_SPECS[name]
         stop = spec.stop_pct or (spec.atr_stop_mult * 0.01) or C.FALLBACK_STOP_RATIO
         size = C.position_size_krw(stop, CAP)
         effective = size * stop / CAP
-        assert effective >= C.RISK_PER_TRADE_RATIO * 0.9, (
-            f"{name}: 실효 f {effective:.4%} 가 명목 f {C.RISK_PER_TRADE_RATIO:.4%} 에 크게 못 미친다 "
-            f"— ALLOC_PER_STRATEGY_RATIO({C.ALLOC_PER_STRATEGY_RATIO}) 가 먼저 구속하고 있다")
+        documented = min(C.RISK_PER_TRADE_RATIO, C.ALLOC_PER_STRATEGY_RATIO * stop)
+        assert abs(effective - documented) < 1e-4, (
+            f"{name}: 실효 f {effective:.4%} 가 문서화된 min(f, 배분×손절) "
+            f"= {documented:.4%} 와 다르다 — 배분/손절/f 중 무엇이 바뀌었는지 확인할 것")
 
 
 def test_allocation_does_not_exceed_capital():
-    """배분상한 × 동시보유 > 100% 면 자본을 초과 배정하게 된다."""
-    assert C.ALLOC_PER_STRATEGY_RATIO * C.MAX_CONCURRENT_POSITIONS <= 1.0 + 1e-9
+    """검증 트랙 배분 + 실험 트랙 예산이 자본을 넘으면 초과 배정이다 (v4.0 트랙 분리)."""
+    validated = C.ALLOC_PER_STRATEGY_RATIO * C.MAX_POSITIONS_VALIDATED
+    experimental = (C.MAX_POSITIONS_EXPERIMENTAL * C.EXPERIMENT_MAX_ORDER_KRW
+                    / C.DEFAULT_CAPITAL_KRW)
+    assert validated + experimental <= 1.0 + 1e-9
 
 
 def test_position_size_scales_with_capital():
@@ -61,23 +70,18 @@ def test_daily_loss_limit_scales():
     assert C.daily_loss_limit_krw(90_000) == 90_000 * C.DAILY_LOSS_LIMIT_RATIO
 
 
-def test_circuits_are_defined_in_R_units():
+def test_v4_absolute_circuit_values():
     """
-    §5 v3.0 — 서킷은 **R 배수**로 정의되어야 한다(lab_circuit.py 13차).
-    절대 %로 박아두면 RISK_PER_TRADE_RATIO 를 바꿀 때 서로 어긋난다
-    (f=1% 기준 값에 f=2.4% 를 넣으면 손절 1.25번에 일일한도가 걸린다).
-    이 테스트는 그 결합을 강제한다 — 매직넘버로 되돌리면 실패한다.
+    §5 v4.0 — 서킷은 **절대값**이다 (운영자 결정 2026-08-14).
+    v3.0 은 R(=f 배수) 단위였지만, 두 트랙(검증 f 기반 + 실험 고정금액)이 한 계좌를
+    공유하면서 R 정의가 성립하지 않게 됐다. 값은 운영자가 직접 골랐다:
+    "천천히 잃으면서 배우는 것과 하루에 다 잃는 것은 배움의 양이 다르다."
     """
-    f = C.RISK_PER_TRADE_RATIO
-    assert C.DAILY_LOSS_LIMIT_RATIO == C.DAILY_LOSS_LIMIT_R * f
-    assert C.MAX_DRAWDOWN_RATIO == C.MAX_DRAWDOWN_R_MULT * f
-    assert C.TOTAL_HEAT_RATIO == f * C.MAX_CONCURRENT_POSITIONS
-    # 오발률 근거(13차): 일일 5R = 연 2.1회, MDD 12.5R = 살아있는 엣지에서 25.7% 발동.
-    # 일일한도가 동시보유 전량 손절(=총위험)보다 작으면 정상 이벤트에 상시 발동한다.
-    assert C.DAILY_LOSS_LIMIT_R >= C.MAX_CONCURRENT_POSITIONS, (
-        "일일한도가 동시보유 전량 손절보다 작으면 한 번의 상관 이벤트로 하루가 끝난다")
+    assert C.DAILY_LOSS_LIMIT_RATIO == 0.05
+    assert C.MAX_DRAWDOWN_RATIO == 0.50
+    assert C.MAX_CONSECUTIVE_LOSSES == 12
     # MDD 정지선은 일일한도보다 충분히 커야 한다(하루치로 전면정지가 걸리면 안 된다)
-    assert C.MAX_DRAWDOWN_R_MULT > C.DAILY_LOSS_LIMIT_R * 2
+    assert C.MAX_DRAWDOWN_RATIO > C.DAILY_LOSS_LIMIT_RATIO * 2
 
 
 def test_strategy_risk_reward_rule():
@@ -93,6 +97,8 @@ def test_strategy_risk_reward_rule():
     백테스트로 양의 기댓값 입증**. 손익분기 승률 = 1/(1+rr) 을 넘겨야 한다.
     """
     for spec in C.STRATEGY_SPECS.values():
+        if spec.trail_atr_mult > 0:
+            continue    # v4.0: 트레일링 청산 전략(breakout)은 고정 rr 을 쓰지 않는다 (rr=0.0)
         if spec.stop_pct is None:
             assert spec.risk_reward >= 1.5, spec.name
         else:
@@ -149,7 +155,8 @@ def test_두_전략의_진입선은_분리돼_있어야_한다():
 
 
 def test_가동전략_목록():
-    assert C.ACTIVE_STRATEGIES == ("rsi2", "rsi2_15m")
+    # v4.0: breakout 은 EXPERIMENTAL — §11 미통과 상태로 가동하되 주문 상한이 강제된다
+    assert C.ACTIVE_STRATEGIES == ("rsi2", "rsi2_15m", "breakout")
     # 시간손절은 두 전략이 같은 실제 시간(8시간)을 쓴다 — 검증 조건과 일치
     assert C.time_stop_bars_for(C.STRATEGY_SPECS["rsi2"]) * 5 == \
            C.time_stop_bars_for(C.STRATEGY_SPECS["rsi2_15m"]) * 15
@@ -331,3 +338,53 @@ def test_validated_symbol_gets_its_own_spread_cap():
     for sym in ch.STRATEGY_BLACKLIST.get("rsi2", set()):
         assert ch.strategy_spread_cap("rsi2", f"KRW-{sym}") == ch.MAX_SPREAD_RATIO, sym
     assert ch.strategy_spread_cap("rsi2") == ch.MAX_SPREAD_RATIO      # market 없으면 기본값
+
+
+# ── v4.0 실험 트랙 (2026-08-14, 스펙 docs/superpowers/specs/2026-08-14-…) ──
+def test_v4_experimental_track_constants():
+    """v4.0: 실험 트랙 — 검증 없이 가동 가능하되 주문금액 상한이 강제되는 공식 실험 차선."""
+    assert C.EXPERIMENTAL_STRATEGIES == frozenset({"breakout"})
+    assert C.EXPERIMENT_MAX_ORDER_KRW == 10_000
+    assert C.MAX_POSITIONS_VALIDATED == 1
+    assert C.MAX_POSITIONS_EXPERIMENTAL == 3
+    assert C.MAX_CONCURRENT_POSITIONS == 4          # 트랙 합
+    assert C.track_of("breakout") == "experimental"
+    assert C.track_of("rsi2") == "validated"
+    assert C.track_of("unknown") == "validated"      # 모르는 전략은 보수적으로 검증 트랙 취급
+
+
+def test_v4_experiment_order_cap_enforced():
+    """실험 트랙은 사이징 결과와 무관하게 10,000원을 넘을 수 없다 (easy_teaching 사고 재발 방지)."""
+    assert C.position_cap_for("breakout", 90_000.0) == 10_000.0
+    assert C.position_cap_for("breakout", 7_000.0) == 7_000.0
+    assert C.position_cap_for("rsi2", 90_000.0) == 90_000.0   # 검증 트랙은 불변
+
+
+def test_v4_breakout_spec():
+    spec = C.STRATEGY_SPECS["breakout"]
+    assert spec.timeframe == "minute5"
+    assert spec.breakout_bars == 20
+    assert spec.vol_mult == 1.5
+    assert spec.trail_atr_mult == 1.5
+    assert spec.time_stop_bars == 12
+    assert spec.time_stop_min_profit == 0.003
+    assert spec.min_atr_ratio == 0.0        # 변동성 게이트 없음 — rsi2를 죽인 관문을 여기선 안 둔다
+    assert spec.always_active is True       # 레짐 필터 없음
+    assert spec.use_dead_extras is False
+    assert "breakout" in C.ACTIVE_STRATEGIES
+    # 신규 필드의 기본값은 기존 전략의 동작을 바꾸지 않아야 한다
+    rsi2 = C.STRATEGY_SPECS["rsi2"]
+    assert rsi2.breakout_bars == 0 and rsi2.vol_mult == 0.0
+    assert rsi2.trail_atr_mult == 0.0 and rsi2.time_stop_min_profit is None
+
+
+def test_v4_fingerprint_covers_experiment_params():
+    """실험 트랙 상한도 승인 대상 — 상한을 몰래 올리면 지문이 바뀌어 모의로 떨어져야 한다."""
+    before = C.charter_fingerprint()
+    orig = C.EXPERIMENT_MAX_ORDER_KRW
+    try:
+        C.EXPERIMENT_MAX_ORDER_KRW = 50_000
+        assert C.charter_fingerprint() != before
+    finally:
+        C.EXPERIMENT_MAX_ORDER_KRW = orig
+    assert C.charter_fingerprint() == before
