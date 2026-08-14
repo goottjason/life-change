@@ -33,16 +33,21 @@ class TradeLogger:
             cols = {r[1] for r in con.execute("PRAGMA table_info(trades)")}
             if "fill_price" not in cols:
                 con.execute("ALTER TABLE trades ADD COLUMN fill_price REAL")
+            # context (v4.0): 진입 순간의 상황 전부(JSON) — 실험 트랙 코호트 튜닝의 원료.
+            # "어떤 조건의 거래가 손실인가"를 실거래로 답하려면 진입 시점 상태가 남아 있어야 한다.
+            if "context" not in cols:
+                con.execute("ALTER TABLE trades ADD COLUMN context TEXT")
 
     def log(self, event: str, *, strategy: str = "", market: str = "",
             price: float = 0.0, volume: float = 0.0, size_krw: float = 0.0,
-            pnl_krw: float = 0.0, reason: str = "", fill_price: float = 0.0) -> None:
+            pnl_krw: float = 0.0, reason: str = "", fill_price: float = 0.0,
+            context: str = "") -> None:
         ts = now_kst_iso()  # KST(Asia/Seoul) 표기 — 사용자 혼란 방지
         with sqlite3.connect(self.db_path) as con:
             con.execute(
                 "INSERT INTO trades (ts,event,strategy,market,price,volume,size_krw,"
-                "pnl_krw,reason,fill_price) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "pnl_krw,reason,fill_price,context) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (ts, event, strategy, market, price, volume, size_krw, pnl_krw, reason,
-                 fill_price or None),
+                 fill_price or None, context or None),
             )
         print(f"[{ts}] {event} {strategy} {market} {reason} pnl={pnl_krw:.0f}")

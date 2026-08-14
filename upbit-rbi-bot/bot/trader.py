@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 import time
 from dataclasses import dataclass, field
@@ -32,6 +33,7 @@ from strategies.rsi_mean_reversion import RsiMeanReversionStrategy
 from strategies.cvd import CvdStrategy
 from strategies.rsi2_pullback import Rsi2PullbackStrategy, trend_up_from_hourly
 from strategies.easy_teaching import EasyTeachingStrategy
+from strategies.breakout import BreakoutStrategy
 from strategies.regime import detect_regime, is_strategy_active
 from indicators import ta
 from safety.failsafe import Failsafe
@@ -46,6 +48,7 @@ ALL_STRATEGIES = {
     "rsi2": Rsi2PullbackStrategy,
     "rsi2_15m": Rsi2PullbackStrategy,      # 같은 신호, 15분봉 (스펙의 timeframe 으로 구분)
     "easy_teaching": EasyTeachingStrategy,
+    "breakout": BreakoutStrategy,          # v4.0 실험 트랙 (§3.5)
 }
 
 
@@ -166,7 +169,7 @@ class Trader:
                 entry_time=entry_time, entry_atr=entry_atr,
             )
             self.positions[rec_pos.key] = rec_pos
-            self.risk.on_open()
+            self.risk.on_open(rec_pos.strategy)
             self.notifier.send(
                 f"🔧 오펀 복원: {o['market']} {o['volume']:.8f}개 @ {o['avg_price']:.0f} "
                 f"→ '{slot}' 슬롯에서 관리 (§9.3)")
@@ -306,9 +309,9 @@ class Trader:
             if not strat.spec.always_active and not is_strategy_active(strat.regime, regime):
                 blocked(name, f"레짐 불일치 (현재 {regime.value})")
                 continue
-            # 동시 포지션 한도(§5.5, 3개)는 risk.can_enter() 가 본다. 전략당 1포지션 제약은
-            # v1.4에서 제거 — 백테스트 포트폴리오가 동시 3포지션을 가정했으므로 맞춘다.
-            ok, why = self.risk.can_enter()
+            # 동시 포지션 한도(§5.5)는 risk.can_enter() 가 본다 — v4.0부터 전략명을 넘겨
+            # 트랙별 상한(검증 1 · 실험 3)까지 같이 판정한다.
+            ok, why = self.risk.can_enter(name)
             if not ok:
                 blocked(name, f"리스크 한도 — {why}")
                 continue
@@ -380,11 +383,17 @@ class Trader:
             stop_price=stop_price, target_price=target_price,
         )
         self.positions[pos.key] = pos          # '전략:코인' 키 (v1.4)
-        self.risk.on_open()
+        self.risk.on_open(name)
         # price=신호가(판단에 쓴 종가), fill_price=실제 체결 평단 → 둘의 차이가 실효 슬리피지다.
+        # context (v4.0): 진입 순간의 상황 전부 — 주간 코호트 리포트의 원료 (§10.1).
+        # 지문을 함께 저장하므로 파라미터를 튜닝해도 "몇 주차 설정의 성적"으로 비교된다.
+        entry_ctx = dict(sig.meta) if sig else {}
+        entry_ctx["fingerprint"] = C.charter_fingerprint()
+        entry_ctx["spread_pct"] = getattr(self.screener, "spreads", {}).get(market)
         self.logger.log("entry", strategy=name, market=market, price=price,
                         volume=res.filled_volume, size_krw=krw, reason=note,
-                        fill_price=res.avg_price or price)
+                        fill_price=res.avg_price or price,
+                        context=json.dumps(entry_ctx, ensure_ascii=False, default=str))
 
     def _take_partial(self, pos: Position, price: float) -> None:
         """
@@ -469,7 +478,7 @@ class Trader:
 
         fill_price = res.avg_price or price
         pnl = pos.pnl_krw(fill_price)
-        self.risk.on_close(pnl)                                 # §5 상태 갱신
+        self.risk.on_close(pnl, pos.strategy)                   # §5 상태 갱신 (v4.0 트랙 반영)
         self.positions.pop(pos.key, None)
         self.logger.log("exit", strategy=pos.strategy, market=pos.market,
                         price=price, volume=filled, pnl_krw=pnl, fill_price=fill_price,

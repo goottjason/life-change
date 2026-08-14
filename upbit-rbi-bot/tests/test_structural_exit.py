@@ -241,7 +241,8 @@ def test_손익비_미달이면_진입하지_않고_이유를_남긴다():
     t = bare_trader(("rsi2_15m",))
 
     class Sig:
-        stop_price, target_price = 990.0, 1005.0    # RR 0.5
+        stop_price, target_price = 990.0, 1005.0
+        meta: dict = {}    # RR 0.5
 
     t._open("rsi2_15m", t.strategies["rsi2_15m"], "KRW-BTC", 1000.0,
             flat_df(tf="15min"), note="test", sig=Sig())
@@ -261,7 +262,8 @@ def test_구조레벨_진입시_사이징은_구조_손절거리를_쓴다():
     t.orders = Orders()
 
     class Sig:
-        stop_price, target_price = 980.0, 1040.0    # 손절 2.0%, RR 2.0
+        stop_price, target_price = 980.0, 1040.0
+        meta: dict = {}    # 손절 2.0%, RR 2.0
 
     t._open("rsi2_15m", t.strategies["rsi2_15m"], "KRW-BTC", 1000.0,
             flat_df(tf="15min"), note="test", sig=Sig())

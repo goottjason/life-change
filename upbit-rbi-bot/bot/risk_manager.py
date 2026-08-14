@@ -22,7 +22,9 @@ class RiskState:
     daily_pnl: float = 0.0                             # 당일 누적 손익 (§5.2)
     daily_date: object = None                          # daily_pnl 이 속한 날짜(KST). 경계 자동 리셋용
     consecutive_losses: int = 0                        # 연속 손절 (§5.3)
-    open_positions: int = 0                            # 동시 보유 (§5.5)
+    open_positions: int = 0                            # 동시 보유 합계 (§5.5)
+    open_validated: int = 0                            # 검증 트랙 보유 수 (§5.5, v4.0)
+    open_experimental: int = 0                         # 실험 트랙 보유 수 (§5.5, v4.0)
     halted: bool = False                               # 전면 정지 여부 (§5.4)
     halt_reason: str = ""
 
@@ -54,7 +56,9 @@ class RiskManager:
             self.s.consecutive_losses = 0
 
     # ── 진입 가능 여부 (헌장 §3.6, §5) ───────────────────────
-    def can_enter(self) -> tuple[bool, str]:
+    def can_enter(self, strategy: str | None = None) -> tuple[bool, str]:
+        """strategy 를 주면 그 전략의 트랙 상한(v4.0 §5.5)까지 본다. 없으면 전역 판정만
+        (대시보드 스냅샷 등 기존 호출부 호환)."""
         self._roll_day()
         if self.s.halted:
             return False, f"halted: {self.s.halt_reason}"
@@ -68,6 +72,12 @@ class RiskManager:
             return False, "max concurrent positions (§5.5)"
         if self.s.available_krw < C.MIN_ORDER_KRW:
             return False, "insufficient KRW balance (잔고 부족)"
+        if strategy is not None:
+            if C.track_of(strategy) == "experimental":
+                if self.s.open_experimental >= C.MAX_POSITIONS_EXPERIMENTAL:
+                    return False, "실험 트랙 동시 포지션 한도 (§5.5, v4.0)"
+            elif self.s.open_validated >= C.MAX_POSITIONS_VALIDATED:
+                return False, "검증 트랙 동시 포지션 한도 (§5.5)"
         return True, "ok"
 
     # ── 포지션 사이징 (헌장 §7) ──────────────────────────────
@@ -76,8 +86,13 @@ class RiskManager:
         return C.position_size_krw(stop_ratio, self.s.capital, self.s.available_krw)
 
     # ── 체결 결과 반영 ───────────────────────────────────────
-    def on_open(self) -> None:
-        self.s.open_positions += 1
+    def on_open(self, strategy: str = "") -> None:
+        """트랙별 카운터를 올린다 (v4.0 §5.5). 합계(open_positions)는 파생값으로 유지."""
+        if C.track_of(strategy) == "experimental":
+            self.s.open_experimental += 1
+        else:
+            self.s.open_validated += 1
+        self.s.open_positions = self.s.open_validated + self.s.open_experimental
 
     def on_partial_close(self, pnl_krw: float) -> None:
         """
@@ -87,8 +102,12 @@ class RiskManager:
         """
         self.s.daily_pnl += pnl_krw
 
-    def on_close(self, pnl_krw: float) -> None:
-        self.s.open_positions = max(0, self.s.open_positions - 1)
+    def on_close(self, pnl_krw: float, strategy: str = "") -> None:
+        if C.track_of(strategy) == "experimental":
+            self.s.open_experimental = max(0, self.s.open_experimental - 1)
+        else:
+            self.s.open_validated = max(0, self.s.open_validated - 1)
+        self.s.open_positions = self.s.open_validated + self.s.open_experimental
         self.s.daily_pnl += pnl_krw
         if pnl_krw < 0:
             self.s.consecutive_losses += 1

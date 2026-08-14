@@ -71,7 +71,7 @@ def test_보유중인_전략은_낡은_숫자대신_보유중을_표시한다():
 def test_리스크한도로_막히면_한도를_표시한다():
     """동시 포지션 한도로 전 종목이 막힐 때 표가 통째로 비면 원인을 알 수 없다."""
     t = trader()
-    t.risk.can_enter = lambda: (False, "동시 포지션 한도 3개 도달")
+    t.risk.can_enter = lambda name=None: (False, "동시 포지션 한도 도달")
     t._process_market("KRW-XRP", FRAMES)
     row = t.signal_view["KRW-XRP"]["rsi2"]
     assert "한도" in row["reason"]
@@ -81,9 +81,9 @@ def test_리스크한도로_막히면_한도를_표시한다():
 def test_판정한_전략은_숫자가_매_tick_갱신된다():
     """정상 경로 회귀 방지 — 판정한 전략 행에는 이번 tick 의 RSI2·ATR%가 들어간다."""
     t = trader()
-    t.risk.can_enter = lambda: (False, "한도")     # 진입은 막고 판정만 시킨다
+    t.risk.can_enter = lambda name=None: (False, "한도")     # 진입은 막고 판정만 시킨다
     t._process_market("KRW-XRP", FRAMES)
-    t.risk.can_enter = lambda: (True, "ok")
+    t.risk.can_enter = lambda name=None: (True, "ok")
     t._process_market("KRW-XRP", FRAMES)
     row = t.signal_view["KRW-XRP"]["rsi2_15m"]
     assert row["atr_pct"] is not None and row["rsi2"] is not None

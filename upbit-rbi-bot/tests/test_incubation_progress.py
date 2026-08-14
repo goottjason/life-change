@@ -211,3 +211,39 @@ def test_기준시각은_청산이_아니라_진입_시각으로_거른다(tmp_p
     assert rep["per_strategy"]["rsi2"]["n"] == 1
     assert "rsi2_15m" not in rep["per_strategy"]
     assert rep["excluded_prior"] == 1
+
+
+# ── v4.0: 진입 컨텍스트 컬럼 + 실험 트랙 격리 ────────────────────
+def test_logger_context_column_roundtrip(tmp_path):
+    """진입 컨텍스트 JSON이 저장·조회되고, 컬럼이 없던 기존 DB도 자동 마이그레이션된다."""
+    import json, sqlite3
+    from incubation.logger import TradeLogger
+    db = str(tmp_path / "trades.sqlite")
+    # 구버전 스키마(컨텍스트 없음)를 먼저 만들어 마이그레이션을 검증한다
+    with sqlite3.connect(db) as con:
+        con.execute("CREATE TABLE trades (id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                    " ts TEXT, event TEXT, strategy TEXT, market TEXT, price REAL,"
+                    " volume REAL, size_krw REAL, pnl_krw REAL, reason TEXT)")
+    lg = TradeLogger(db)
+    ctx = {"breakout_pct": 0.42, "vol_ratio": 2.1, "trend_up": False}
+    lg.log("entry", strategy="breakout", market="KRW-BTC", price=100.0,
+           context=json.dumps(ctx, ensure_ascii=False))
+    with sqlite3.connect(db) as con:
+        row = con.execute("SELECT context FROM trades WHERE event='entry'").fetchone()
+    assert json.loads(row[0])["vol_ratio"] == 2.1
+
+
+def test_breakout_trades_excluded_from_incubation(tmp_path):
+    """실험 트랙 거래는 인큐베이션 표본에 절대 섞이지 않는다 (스펙 §1)."""
+    from incubation.logger import TradeLogger
+    from incubation.progress import load_roundtrips, activity
+    db = str(tmp_path / "trades.sqlite")
+    lg = TradeLogger(db)
+    lg.log("entry", strategy="breakout", market="KRW-BTC", price=100.0, size_krw=10_000)
+    lg.log("exit", strategy="breakout", market="KRW-BTC", price=101.0, pnl_krw=90.0)
+    lg.log("entry", strategy="rsi2", market="KRW-ETH", price=100.0, size_krw=60_000)
+    lg.log("exit", strategy="rsi2", market="KRW-ETH", price=99.0, pnl_krw=-660.0)
+    trips = load_roundtrips(db, since=None)
+    assert {t.strategy for t in trips} == {"rsi2"}      # 기본 필터가 rsi2 계열만 본다
+    act = activity(db)
+    assert act["n7"] == 1                               # breakout 진입은 활동 집계에도 안 들어간다
