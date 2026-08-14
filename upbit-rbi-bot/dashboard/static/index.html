@@ -11,15 +11,18 @@
        2) 모든 지표 옆에 '이게 무슨 뜻인지'를 붙인다
        3) 전문용어(PF·t값·슬리피지)는 쓰되 반드시 쉬운 말을 같이 적는다
        4) 휴대폰에서 먼저 본다고 가정한다
+     v4.0 — 화면은 '두 트랙'을 축으로 재구성했다:
+       🚀 실험 트랙(breakout): 자주 거래하며 데이터를 모아 매주 다듬는 트랙 (주력)
+       🧪 검증 트랙(rsi2):    백테스트를 통과한 전략이 실전에서도 통하는지 확인하는 트랙
      ───────────────────────────────────────────────────────── */
   :root{
     --bg:#0f1216; --card:#171c23; --card2:#1e242d; --line:#2a323d;
     --tx:#e8edf4; --tx2:#9aa7b8; --tx3:#6b7889;
-    --up:#22c55e; --down:#ef4444; --info:#3b82f6; --r:16px;
+    --up:#22c55e; --down:#ef4444; --info:#3b82f6; --exp:#a78bfa; --r:16px;
   }
   @media (prefers-color-scheme: light){
     :root{ --bg:#f4f6f9; --card:#fff; --card2:#f7f9fc; --line:#e3e8ef;
-           --tx:#131820; --tx2:#5b6675; --tx3:#8b96a5; }
+           --tx:#131820; --tx2:#5b6675; --tx3:#8b96a5; --exp:#7c5cd6; }
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--tx);
@@ -54,6 +57,7 @@
   .bar{height:12px;border-radius:99px;background:var(--card2);overflow:hidden;margin:10px 0 6px}
   .bar>i{display:block;height:100%;border-radius:99px;transition:width .4s;
          background:linear-gradient(90deg,#3b82f6,#22c55e)}
+  .bar.exp>i{background:linear-gradient(90deg,#7c5cd6,#a78bfa)}
   table{width:100%;border-collapse:collapse;font-size:13.5px}
   th,td{padding:10px 6px;text-align:right;border-bottom:1px solid var(--line);vertical-align:top}
   th:first-child,td:first-child{text-align:left}
@@ -65,6 +69,8 @@
   .sym{font-size:17px;font-weight:700}
   .tag{font-size:11px;color:var(--tx3);background:var(--card);padding:3px 8px;
        border-radius:99px;margin-left:6px}
+  .tag.exp{color:var(--exp);border:1px solid var(--exp);background:transparent}
+  .tag.val{color:var(--info);border:1px solid var(--info);background:transparent}
   .cond{display:flex;gap:9px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13.5px}
   .cond:last-child{border-bottom:none}
   .cond .mk{flex:0 0 20px}
@@ -74,6 +80,8 @@
   .gauge .now{position:absolute;top:-4px;width:3px;height:16px;background:var(--tx);
               border-radius:2px;transform:translateX(-50%)}
   .gscale{display:flex;justify-content:space-between;font-size:11px;color:var(--tx3)}
+  .subhead{font-size:13px;font-weight:700;color:var(--tx2);margin:16px 0 8px}
+  .subhead:first-child{margin-top:0}
   details{border-top:1px solid var(--line)}
   details:first-of-type{border-top:none}
   summary{cursor:pointer;font-size:14px;padding:11px 0;list-style:none;font-weight:600}
@@ -108,73 +116,112 @@
   </div>
 
   <div class="card">
-    <h2>🧪 이 전략이 진짜인지 확인하는 중</h2>
+    <h2>🚀 실험 트랙 — 자주 거래하며 배우는 중 <span class="tag exp">breakout</span></h2>
+    <p class="hint">
+      이 트랙의 목적은 <b>당장 돈을 버는 게 아니라, 자주 거래해서 데이터를 모으는 것</b>입니다.
+      과거 데이터 기준 이 전략은 거래당 약 −0.19%로, <b>월 3천원쯤 수업료</b>를 내는 셈입니다.
+      대신 한 건당 <b>딱 10,000원만</b> 쓰도록 묶여 있고, 매주 이 표를 보고
+      "어떤 조건의 거래가 손해였나"를 찾아 규칙을 다듬습니다.
+    </p>
+    <div id="experiment"></div>
+  </div>
+
+  <div class="card">
+    <h2>🧪 검증 트랙 — 이 전략이 진짜인지 확인하는 중 <span class="tag val">rsi2</span></h2>
     <p class="hint">
       과거 2년 데이터에서는 잘 통했습니다. 그런데 <b>실제 돈으로도 그런지는 따로 확인해야</b> 합니다.
       거래 <b>100건</b>이 쌓이면 처음으로 "진짜다/아니다"를 말할 수 있습니다.
-      그 전에 나오는 승률·수익률은 <b>운일 수 있어서 판정하지 않습니다.</b>
+      이 전략은 조건이 까다로워 <b>몇 주씩 거래가 없는 것도 정상</b>입니다 — 실험 트랙과는 성격이 다릅니다.
     </p>
     <div id="incu"></div>
   </div>
 
   <div class="card">
     <h2>📦 지금 들고 있는 것</h2>
-    <p class="hint">막대에서 <b>흰 선이 지금 위치</b>이고, 양 끝이 자동으로 팔리는 지점입니다.</p>
+    <p class="hint">실험 트랙은 <b>고점을 따라가다 꺾이면</b> 팔고, 검증 트랙은 정해진 손절·익절선에서 팝니다.</p>
     <div id="positions"></div>
   </div>
 
   <div class="card">
     <h2>🔍 지금 왜 안 사고 있나</h2>
     <p class="hint">
-      봇은 <b>조건 3개가 동시에 맞을 때만</b> 삽니다. 하나라도 어긋나면 그냥 기다립니다.
-      <b>아무것도 안 사는 날이 대부분인 게 정상</b>입니다.
+      <b>실험 트랙</b>은 "24시간 최고가 돌파 + 거래량 급증" 2가지가 맞아야 사고,
+      <b>검증 트랙</b>은 조건 3가지가 동시에 맞아야 삽니다.
+      실험 트랙은 하루 몇 건씩 나오는 게 보통이고, 검증 트랙은 조용한 날이 대부분입니다.
     </p>
     <div id="conds"></div>
   </div>
 
   <div class="card">
     <h2>📜 최근 거래</h2>
-    <p class="hint">사고 판 것을 한 줄로 묶은 기록입니다.</p>
+    <p class="hint">사고 판 것을 한 줄로 묶은 기록입니다. 보라색은 실험 트랙, 파란색은 검증 트랙입니다.</p>
     <div id="trips"></div>
   </div>
 
   <div class="card">
     <h2>📖 이 봇은 무슨 전략을 쓰나</h2>
     <details open>
-      <summary>한 줄 요약</summary>
+      <summary>한 줄 요약 — 트랙이 2개입니다</summary>
       <div class="doc">
-        <p><b>오르고 있는 코인이 잠깐 미끄러졌을 때 사서, 제자리로 돌아오면 판다.</b></p>
-        <p>떨어지는 걸 무작정 사는 게 아닙니다. <b>오르는 중인 것만</b> 골라서 그게 잠깐
-        미끄러진 순간만 삽니다. 보통 <b>1시간 안</b>에 사고팝니다.</p>
+        <p>🚀 <b>실험 트랙(breakout)</b>: 지난 24시간 최고가를 <b>거래량이 급증하며 뚫는 순간</b> 사서,
+        오르는 동안 따라가다 <b>꺾이면 바로</b> 팝니다. 하루 3~10건쯤 거래합니다.</p>
+        <p>🧪 <b>검증 트랙(rsi2)</b>: 오르고 있는 코인이 <b>잠깐 미끄러졌을 때</b> 사서,
+        제자리로 돌아오면 팝니다. 조건이 까다로워 거래가 드뭅니다.</p>
       </div>
     </details>
     <details>
-      <summary>살 때 — 조건 3개가 전부 맞아야 함</summary>
-      <div class="doc"><ol>
-        <li><b>방금 확 미끄러졌다</b> — 직전 몇 분이 거의 전부 하락 (RSI2 ≤ 3)</li>
-        <li><b>큰 흐름은 아직 상승</b> — 추세가 꺾였으면 안 삽니다.
-            하락 추세에서 사면 그냥 계속 떨어집니다 (1시간봉 EMA200 위)</li>
-        <li><b>충분히 움직이는 코인이다</b> — 안 움직이면 되돌아와도 수수료 빼면 남는 게 없습니다.
-            <b>이 조건이 없으면 전략 전체가 마이너스</b>가 됩니다 (ATR ≥ 0.6%)</li>
-      </ol></div>
+      <summary>🚀 실험 트랙 — 살 때·팔 때</summary>
+      <div class="doc">
+        <p><b>살 때 (2가지 동시)</b>:</p>
+        <ol>
+          <li><b>지난 24시간 최고가를 방금 넘었다</b> — 이제 막 움직이기 시작한 코인만</li>
+          <li><b>거래량이 평소의 5배 이상</b> — 진짜 움직임인지 확인</li>
+        </ol>
+        <p><b>팔 때 (셋 중 먼저 오는 것)</b>:</p>
+        <ul>
+          <li><b>고점에서 꺾이면</b> — 최고점 대비 일정 폭(2×ATR) 내려오면 자동 매도.
+              오르는 동안은 계속 따라갑니다</li>
+          <li><b>1시간 안에 +0.3%도 못 가면</b> — 안 가는 돌파는 빨리 회수</li>
+          <li><b>최악의 경우</b> — 산 값에서 일정 폭 밑으로 빠지면 무조건 손절</li>
+        </ul>
+        <p>⚠ <b>솔직한 사실</b>: 과거 2년 데이터로 재보면 이 전략은 거래당 <b>−0.19%</b>입니다
+        (수수료·호가 차이 때문). 그런데도 돌리는 이유는, 어떤 조건의 돌파가 통하고 어떤 게
+        안 통하는지 <b>실제 데이터로 배우기 위해서</b>입니다. 그래서 건당 1만원으로 묶고,
+        매주 위의 실험 트랙 표를 보며 규칙을 하나씩 다듬습니다.</p>
+      </div>
     </details>
     <details>
-      <summary>팔 때 — 4가지 중 먼저 오는 것</summary>
-      <div class="doc"><ul>
-        <li><b>되돌림 끝</b> — <b>가장 흔한 경우</b>입니다 (RSI2 ≥ 70)</li>
-        <li><b>익절</b> +2.5%</li>
-        <li><b>손절</b> −2.5% — 틀렸다고 인정하고 빠르게 자릅니다</li>
-        <li><b>시간 초과</b> 8시간 — 안 돌아오면 돈을 회수합니다</li>
-      </ul></div>
+      <summary>🧪 검증 트랙 — 살 때·팔 때</summary>
+      <div class="doc">
+        <p><b>살 때 (3가지 동시)</b>:</p>
+        <ol>
+        <li><b>방금 확 미끄러졌다</b> — 직전 몇 분이 거의 전부 하락 (RSI2 ≤ 3)</li>
+        <li><b>큰 흐름은 아직 상승</b> — 추세가 꺾였으면 안 삽니다 (1시간봉 EMA200 위)</li>
+        <li><b>충분히 움직이는 코인이다</b> — 안 움직이면 수수료도 못 건집니다 (ATR ≥ 0.6%)</li>
+        </ol>
+        <p><b>팔 때 (4가지 중 먼저 오는 것)</b>: 되돌림 끝(가장 흔함, RSI2 ≥ 70) ·
+        익절 +2.5% · 손절 −2.5% · 시간 초과 8시간</p>
+      </div>
     </details>
     <details>
       <summary>어떤 코인을 사나</summary>
       <div class="doc">
-        <p>사는 값과 파는 값의 차이(호가 스프레드)가 <b>0.10% 이하</b>인 코인만 삽니다 —
+        <p>사는 값과 파는 값의 차이(호가 스프레드)가 작은 코인만 삽니다 —
         BTC·ETH·XRP·SOL 같은 것들입니다.</p>
-        <p>거래 한 번에 기대하는 이익이 <b>+0.18%</b>뿐이기 때문입니다. 어떤 알트코인은
-        그 값 차이만 <b>0.9%</b>라 <b>사는 순간 이미 집니다.</b>
-        봇이 10분마다 다시 재서 자동으로 걸러냅니다.</p>
+        <p>거래 한 번의 이익·손해가 0.2% 안팎인데, 어떤 알트코인은 그 값 차이만
+        <b>0.9%</b>라 <b>사는 순간 이미 집니다.</b> 봇이 10분마다 다시 재서 자동으로 걸러냅니다.</p>
+      </div>
+    </details>
+    <details>
+      <summary>돈이 어떻게 나뉘어 있나 · 안전장치</summary>
+      <div class="doc">
+        <ul>
+          <li><b>실험 트랙</b>: 한 건 10,000원 고정 × 동시 최대 3개 = 최대 30,000원</li>
+          <li><b>검증 트랙</b>: 나머지 자본으로 동시 최대 1개</li>
+          <li><b>하루 −5%</b> 잃으면 그날은 더 사지 않습니다</li>
+          <li><b>고점 대비 −50%</b>가 되면 봇이 스스로 전부 멈춥니다 (다시 켜는 건 수동)</li>
+          <li>연속 12번 손절해도 하루 쉽니다</li>
+        </ul>
       </div>
     </details>
     <details>
@@ -201,6 +248,8 @@ const cls = n => (n==null||isNaN(n)) ? "" : (n>0?"up":(n<0?"down":""));
 const esc = s => String(s??"").replace(/[<>&]/g, c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
 const kv = (k,v,n,c) => `<div class="kv"><div class="k">${k}</div>
    <div class="v ${c||""}">${v}</div>${n?`<div class="n">${n}</div>`:""}</div>`;
+const isExp = strat => strat === "breakout";               // 실험 트랙 판별 (charter §3.5)
+const trackTag = strat => `<span class="tag ${isExp(strat)?"exp":"val"}">${esc(strat)}</span>`;
 
 function renderBanner(s){
   const r = s.risk||{}, bot = s.bot||{};
@@ -217,16 +266,16 @@ function renderBanner(s){
   } else if (s.can_enter && s.can_enter!=="ok"){
     kind="warn"; state="⏸️ 새로 사지 않는 중";
     const map = {
-      "consecutive loss circuit (§5.3)":"연속으로 손절이 나서 잠시 쉬는 중입니다(안전장치).",
-      "daily loss limit hit (§5.2)":"오늘 손실 한도에 닿아 오늘은 더 사지 않습니다.",
-      "max concurrent positions (§5.5)":"이미 최대 개수(3개)를 들고 있어 더 사지 않습니다.",
+      "consecutive loss circuit (§5.3) — 익일 자동 해제":"연속으로 손절이 나서 잠시 쉬는 중입니다(안전장치). 내일 자동으로 풀립니다.",
+      "daily loss limit hit (§5.2)":"오늘 손실 한도(−5%)에 닿아 오늘은 더 사지 않습니다.",
+      "max concurrent positions (§5.5)":"이미 최대 개수(검증 1 + 실험 3 = 4개)를 들고 있어 더 사지 않습니다.",
       "insufficient KRW balance (잔고 부족)":"원화가 부족해 더 살 수 없습니다."
     };
     why = (map[s.can_enter] || esc(s.can_enter)) + " 들고 있는 건 그대로 관리합니다.";
   } else {
     const n = (s.positions||[]).length;
     why = n ? `코인 ${n}개를 들고 있고, 팔 자리를 기다리는 중입니다.`
-            : "살 자리를 기다리는 중입니다. 조건이 맞는 날이 드문 게 정상입니다.";
+            : "살 자리를 기다리는 중입니다. 실험 트랙은 하루 몇 건, 검증 트랙은 드물게 삽니다.";
   }
   document.getElementById("banner").className = "banner "+kind;
   document.getElementById("bstate").textContent = state;
@@ -237,9 +286,58 @@ function renderMoney(s){
   const r = s.risk||{}, dd = r.drawdown_pct;
   document.getElementById("money").innerHTML =
     kv("평가액", won(r.equity), "원화 + 코인") +
-    kv("오늘 손익", wonS(r.daily_pnl), `오늘 한도 ${won(r.daily_loss_limit)}`, cls(r.daily_pnl)) +
-    kv("고점 대비", pct(-(dd||0)), "가장 좋았을 때보다", dd>0?"down":"") +
-    kv("보유 개수", (r.open_positions??0)+" / 3", "동시에 최대 3개");
+    kv("오늘 손익", wonS(r.daily_pnl), `오늘 한도 ${won(r.daily_loss_limit)} (−5%)`, cls(r.daily_pnl)) +
+    kv("고점 대비", pct(-(dd||0)), "−50%면 봇이 스스로 멈춤", dd>0?"down":"") +
+    kv("보유 개수", (r.open_positions??0)+" / 4", "검증 1개 + 실험 3개");
+}
+
+/* ── 🚀 실험 트랙 (v4.0) ─────────────────────────────────────
+   /api/experiment 의 코호트(=같은 조건끼리 묶은 그룹) 표를 그린다.
+   30건 미만이면 성적을 판정하지 않는다는 원칙을 화면에도 그대로 쓴다. */
+function renderExperiment(exp){
+  const o = exp.overall||{}, n = exp.n||0, JUDGE = 30;
+  let html = "";
+  if (!n){
+    html = `<div class="empty">아직 사고판 거래가 없습니다.<br>
+            이 트랙은 <b>하루 3~10건</b>이 목표입니다. 첫날엔 0건일 수도 있고,<br>
+            며칠째 0건이면 "거래량 5배" 조건이 너무 빡빡한지 같이 점검하면 됩니다.</div>`;
+  } else {
+    html = `<div class="grid" style="margin-bottom:14px">`+
+      kv("사고판 횟수", n+"건", n<JUDGE?`${JUDGE}건부터 첫 판정`: "판정 가능") +
+      kv("누적 손익", wonS(o.pnl_krw), "실험에 쓴 돈의 결과", cls(o.pnl_krw)) +
+      kv("거래당", pct(o.exp_pct,3), "예상 수업료 −0.19% 근처면 정상", cls(o.exp_pct)) +
+      kv("승률", (o.winrate==null?"—":o.winrate.toFixed(0)+"%"), "이 전략은 30% 근처가 보통", "") +
+      `</div>`;
+    if (n < JUDGE){
+      html += `<div class="bar exp"><i style="width:${Math.min(100,n/JUDGE*100)}%"></i></div>
+        <div class="muted" style="font-size:13px;margin-bottom:14px">
+        첫 판정까지 <b>${n}/${JUDGE}건</b> — 그 전의 승률·손익은 운일 수 있어 판정하지 않습니다.</div>`;
+    }
+    const axes = exp.axes||{};
+    const order = ["추세(1시간봉)","거래량비","시간대(KST)","종목","설정(지문)"];
+    const axisHint = {
+      "추세(1시간봉)":"큰 흐름이 상승일 때 산 돌파 vs 하락일 때 산 돌파",
+      "거래량비":"거래량이 평소의 몇 배일 때 샀나",
+      "시간대(KST)":"하루 중 언제 산 거래인가",
+      "종목":"어떤 코인에서 샀나",
+      "설정(지문)":"규칙을 바꾼 뒤(버전별)의 성적 비교"
+    };
+    for (const axis of order){
+      const rows = axes[axis]; if (!rows || !rows.length) continue;
+      html += `<details><summary>${esc(axis)} 별로 보기</summary><div class="doc">
+        <p class="hint" style="margin:4px 0 10px">${esc(axisHint[axis]||"")}</p>
+        <table><thead><tr><th>조건</th><th>건수</th><th>승률</th><th>거래당</th></tr></thead><tbody>`+
+        rows.map(r=>`<tr>
+          <td>${esc(r.bucket)}</td><td class="muted">${r.n}건${r.n<JUDGE?"·부족":""}</td>
+          <td>${r.winrate==null?"—":r.winrate.toFixed(0)+"%"}</td>
+          <td class="${cls(r.exp_pct)}">${pct(r.exp_pct,3)}</td></tr>`).join("")+
+        `</tbody></table></div></details>`;
+    }
+    html += `<p class="hint" style="margin:14px 0 0">
+      매주 이 표에서 <b>유독 손해가 큰 조건</b>을 찾아 규칙을 다듬습니다.
+      "부족"이 붙은 줄은 아직 건수가 적어 믿으면 안 됩니다.</p>`;
+  }
+  document.getElementById("experiment").innerHTML = html;
 }
 
 function renderIncubation(inc){
@@ -249,7 +347,7 @@ function renderIncubation(inc){
       <b>${n}건</b> / ${t}건 모임 · ${esc(inc.verdict||"")}</div>`;
   if (!n){
     html += `<div class="empty">아직 사고판 거래가 없습니다.<br>
-             하루 1건 정도가 정상이라 며칠간 0건일 수도 있습니다.</div>`;
+             이 트랙은 <b>변동성이 큰 날에 몰아서</b> 거래하고 조용하면 몇 주씩 쉽니다.</div>`;
   } else {
     const pf = o.pf;
     html += `<table><thead><tr><th>항목</th><th>실제</th><th>과거 데이터</th><th>무슨 뜻</th></tr></thead><tbody>
@@ -282,16 +380,26 @@ function renderPositions(s){
     return;
   }
   document.getElementById("positions").innerHTML = ps.map(p=>{
+    const head = `<div class="top">
+      <div><span class="sym">${esc((p.market||"").replace("KRW-",""))}</span>
+           ${trackTag(p.strategy||"")}</div>
+      <div class="${cls(p.pnl_krw)}" style="font-size:21px;font-weight:700">
+        ${wonS(p.pnl_krw)} <span style="font-size:13px">(${pct(p.pnl_pct)})</span></div>
+    </div>`;
+    if (isExp(p.strategy)){
+      // 실험 트랙(breakout)은 고정 익절선이 없다 — 고점을 따라가는 트레일링 청산이라
+      // 손절~익절 게이지 대신 청산 규칙을 문장으로 보여준다.
+      return `<div class="box">${head}
+        <div class="hint" style="margin:8px 0 0">
+          산 값 ${won(p.entry_price)} → 지금 ${won(p.current_price)} · 투입 ${won(p.size_krw)}<br>
+          🚀 <b>고점을 따라가는 중</b> — 최고점에서 일정 폭(2×ATR) 꺾이면 자동으로 팝니다.
+          1시간 안에 +0.3%를 못 가면 회수하고, 최악의 경우 ${pct(p.sl)} 밑으로는 무조건 손절합니다.
+        </div></div>`;
+    }
     const sl=p.sl, tp=p.tp, cur=p.pnl_pct, span=(tp-sl)||1;
     const at = Math.max(0,Math.min(100,(cur-sl)/span*100));
     const zero = Math.max(0,Math.min(100,(0-sl)/span*100));
-    return `<div class="box">
-      <div class="top">
-        <div><span class="sym">${esc((p.market||"").replace("KRW-",""))}</span>
-             <span class="tag">${esc(p.strategy||"")}</span></div>
-        <div class="${cls(p.pnl_krw)}" style="font-size:21px;font-weight:700">
-          ${wonS(p.pnl_krw)} <span style="font-size:13px">(${pct(cur)})</span></div>
-      </div>
+    return `<div class="box">${head}
       <div class="gauge">
         <div class="zone" style="left:0;width:${zero}%;background:var(--down)"></div>
         <div class="zone" style="left:${zero}%;width:${100-zero}%;background:var(--up)"></div>
@@ -307,40 +415,75 @@ function renderPositions(s){
 }
 
 function renderConditions(s){
-  const rows = [];
+  const rsiRows = [], boRows = [];
   for (const [market, byStrat] of Object.entries(s.signals||{}))
-    for (const [strat, v] of Object.entries(byStrat))
-      if (v && v.rsi2 !== undefined) rows.push({market, strat, ...v});
-  if (!rows.length){
+    for (const [strat, v] of Object.entries(byStrat)){
+      if (!v) continue;
+      if (v.rsi2 !== undefined) rsiRows.push({market, strat, ...v});
+      else if (v.breakout_pct !== undefined) boRows.push({market, strat, ...v});
+    }
+  if (!rsiRows.length && !boRows.length){
     document.getElementById("conds").innerHTML =
       `<div class="empty">아직 판정 정보가 없습니다.<br>봇이 막 켜졌다면 1~2분 기다려 주세요.</div>`;
     return;
   }
-  const gateOk = r => r.atr_pct!=null && (r.atr_pct/100) >= r.gate;
-  const score = r => (r.rsi_ok?1:0)+(r.trend_up===true?1:0)+(gateOk(r)?1:0);
-  rows.sort((a,b)=>score(b)-score(a));
+  let html = "";
   const mk = ok => ok ? "✅" : "⬜";
-  document.getElementById("conds").innerHTML = rows.slice(0,6).map(r=>`
-    <div class="box" style="padding:14px">
-      <div class="top" style="margin-bottom:4px">
-        <div><span class="sym" style="font-size:15px">${esc(r.market.replace("KRW-",""))}</span>
-             <span class="tag">${esc(r.strat)}</span></div>
-        <div class="muted" style="font-size:12px">${score(r)}/3 통과</div>
-      </div>
-      <div class="cond"><span class="mk">${mk(r.rsi_ok)}</span><span>
-        <b>방금 미끄러졌나?</b>
-        <small>지금 ${r.rsi2} · ${r.entry} 이하여야 함 (낮을수록 많이 떨어진 것)</small></span></div>
-      <div class="cond"><span class="mk">${mk(r.trend_up===true)}</span><span>
-        <b>큰 흐름이 상승인가?</b>
-        <small>${r.trend_up===true?"상승 중":(r.trend_up===false?"하락 중 — 이럴 땐 사지 않습니다":"판정 대기")}</small></span></div>
-      <div class="cond"><span class="mk">${mk(gateOk(r))}</span><span>
-        <b>충분히 움직이나?</b>
-        <small>지금 ${r.atr_pct==null?"—":r.atr_pct+"%"} · ${(r.gate*100).toFixed(2)}% 이상이어야 함
-        (작으면 수수료도 못 건집니다)</small></span></div>
-    </div>`).join("");
+
+  // ── 실험 트랙: 2조건 (24h 고가 돌파 · 거래량) — 돌파에 가까운 순으로 정렬
+  if (boRows.length){
+    const boOk = r => r.breakout_pct != null && r.breakout_pct > 0;
+    const volOk = r => r.vol_ratio != null && r.vol_mult != null && r.vol_ratio >= r.vol_mult;
+    const boScore = r => (boOk(r)?1:0)+(volOk(r)?1:0);
+    boRows.sort((a,b)=> boScore(b)-boScore(a) || (b.breakout_pct??-99)-(a.breakout_pct??-99));
+    html += `<div class="subhead">🚀 실험 트랙 — 돌파에 가장 가까운 코인</div>`;
+    html += boRows.slice(0,4).map(r=>`
+      <div class="box" style="padding:14px">
+        <div class="top" style="margin-bottom:4px">
+          <div><span class="sym" style="font-size:15px">${esc(r.market.replace("KRW-",""))}</span>
+               ${trackTag(r.strat)}</div>
+          <div class="muted" style="font-size:12px">${boScore(r)}/2 통과</div>
+        </div>
+        <div class="cond"><span class="mk">${mk(boOk(r))}</span><span>
+          <b>24시간 최고가를 넘었나?</b>
+          <small>${r.breakout_pct==null ? "판정 대기"
+                   : (r.breakout_pct>0 ? "방금 넘었습니다 (+"+r.breakout_pct+"%)"
+                                       : "아직 고가보다 "+Math.abs(r.breakout_pct).toFixed(2)+"% 아래")}</small></span></div>
+        <div class="cond"><span class="mk">${mk(volOk(r))}</span><span>
+          <b>거래량이 평소의 ${r.vol_mult??5}배 이상인가?</b>
+          <small>지금 ${r.vol_ratio==null?"—":r.vol_ratio+"배"} — 확 몰릴 때만 삽니다</small></span></div>
+      </div>`).join("");
+  }
+
+  // ── 검증 트랙: 기존 3조건
+  if (rsiRows.length){
+    const gateOk = r => r.atr_pct!=null && (r.atr_pct/100) >= r.gate;
+    const score = r => (r.rsi_ok?1:0)+(r.trend_up===true?1:0)+(gateOk(r)?1:0);
+    rsiRows.sort((a,b)=>score(b)-score(a));
+    html += `<div class="subhead">🧪 검증 트랙 — 조건에 가장 가까운 코인</div>`;
+    html += rsiRows.slice(0,4).map(r=>`
+      <div class="box" style="padding:14px">
+        <div class="top" style="margin-bottom:4px">
+          <div><span class="sym" style="font-size:15px">${esc(r.market.replace("KRW-",""))}</span>
+               ${trackTag(r.strat)}</div>
+          <div class="muted" style="font-size:12px">${score(r)}/3 통과</div>
+        </div>
+        <div class="cond"><span class="mk">${mk(r.rsi_ok)}</span><span>
+          <b>방금 미끄러졌나?</b>
+          <small>지금 ${r.rsi2} · ${r.entry} 이하여야 함 (낮을수록 많이 떨어진 것)</small></span></div>
+        <div class="cond"><span class="mk">${mk(r.trend_up===true)}</span><span>
+          <b>큰 흐름이 상승인가?</b>
+          <small>${r.trend_up===true?"상승 중":(r.trend_up===false?"하락 중 — 이럴 땐 사지 않습니다":"판정 대기")}</small></span></div>
+        <div class="cond"><span class="mk">${mk(gateOk(r))}</span><span>
+          <b>충분히 움직이나?</b>
+          <small>지금 ${r.atr_pct==null?"—":r.atr_pct+"%"} · ${(r.gate*100).toFixed(2)}% 이상이어야 함
+          (작으면 수수료도 못 건집니다)</small></span></div>
+      </div>`).join("");
+  }
+  document.getElementById("conds").innerHTML = html;
 }
 
-const EXIT_KO = {reverse:"되돌림 끝 (정상)", take_profit:"익절", stop_loss:"손절",
+const EXIT_KO = {reverse:"되돌림 끝 (정상)", take_profit:"고점 익절", stop_loss:"손절",
                  dead:"시간 초과 회수", kill_switch:"비상 정지", partial_take_profit:"절반 익절"};
 function renderTrips(trips){
   if (!Array.isArray(trips) || !trips.length){
@@ -355,7 +498,7 @@ function renderTrips(trips){
       const p = (t.size_krw && t.pnl_krw!=null) ? (t.pnl_krw/t.size_krw*100) : null;
       const why = EXIT_KO[String(t.exit_reason||"").split(":")[0]] || esc(t.exit_reason||"—");
       return `<tr>
-        <td>${esc((t.market||"").replace("KRW-",""))}
+        <td>${esc((t.market||"").replace("KRW-",""))} ${trackTag(t.strategy||"")}
             <div class="muted" style="font-size:11px">${esc((t.exit_ts||"").slice(5,16).replace("T"," "))}</div></td>
         <td class="${cls(t.pnl_krw)}">${wonS(t.pnl_krw)}
             <div class="muted" style="font-size:11px">${p==null?"":pct(p)}</div></td>
@@ -366,31 +509,38 @@ function renderTrips(trips){
 
 function renderExpect(s){
   const eq = (s.risk||{}).equity || 90000;
-  const size = Math.min(eq/3, eq*0.01/0.025);
+  // 검증 트랙: 실효 리스크 min(f 2.4%, 배분 2/3 × 손절 2.5%) ≈ 1.67% → 포지션 ≈ 자본의 2/3
+  const size = eq * 2/3;
   const per = size*0.00176, day = per*1.0;
   document.getElementById("expect").innerHTML = `
     <p>지금 계좌(<b>${won(eq)}</b>) 기준으로 <b>과거 데이터가 말하는</b> 기대치입니다.
        미래를 보장하지 않습니다.</p>
+    <p>🧪 <b>검증 트랙(rsi2)</b> — 이게 수익의 본체 후보입니다:</p>
     <ul>
-      <li>거래 빈도: <b>하루 1번쯤</b></li>
+      <li>거래 빈도: <b>변동성 큰 날에 몰아서</b> (조용하면 몇 주 0건)</li>
       <li>한 번 거래에: <b>약 ${wonS(per)}</b> (+0.176%)</li>
-      <li>한 달에: <b>약 ${wonS(day*30)}</b></li>
-      <li>1년에: <b>약 ${wonS(day*365)}</b> (계좌의 약 21%)</li>
-      <li>과거 가장 나빴을 때: <b>−${won(eq*0.056)}</b> (−5.6%)</li>
+      <li>거래가 나오는 달 기준: <b>약 ${wonS(day*30)}</b></li>
     </ul>
-    <p><b>솔직히 한 달에 커피 두 잔 값입니다.</b> 시드가 작아서 그렇습니다.
-       지금 목적은 돈을 버는 게 아니라 <b>"이 전략이 실제로도 통하는가"를 100건으로 확인하는 것</b>입니다.
-       그게 확인된 뒤에 금액을 늘릴지 판단하는 순서가 맞습니다.</p>`;
+    <p>🚀 <b>실험 트랙(breakout)</b> — 이건 수익이 아니라 수업료입니다:</p>
+    <ul>
+      <li>거래 빈도: <b>하루 3~10건</b></li>
+      <li>과거 데이터 기준: 거래당 <b>−0.19%</b> → 한 달에 <b>약 −3,000원</b></li>
+      <li>대가로 얻는 것: <b>매주 규칙을 다듬을 실거래 데이터</b></li>
+    </ul>
+    <p><b>솔직히 지금 단계에서 돈은 커피값 수준입니다.</b> 시드가 작아서가 아니라 그게 목적이어서입니다 —
+       실험 트랙에서 <b>통하는 조건을 찾아내고</b>, 검증 트랙에서 <b>100건 확인을 끝낸 뒤</b>
+       금액을 늘릴지 판단하는 순서입니다.</p>`;
 }
 
 async function load(){
   try{
-    const [s, inc, trips] = await Promise.all([
+    const [s, inc, exp, trips] = await Promise.all([
       fetch(BASE+"/api/status").then(r=>r.json()),
       fetch(BASE+"/api/incubation").then(r=>r.json()),
+      fetch(BASE+"/api/experiment").then(r=>r.json()),
       fetch(BASE+"/api/roundtrips?limit=20").then(r=>r.json()),
     ]);
-    renderBanner(s); renderMoney(s); renderIncubation(inc);
+    renderBanner(s); renderMoney(s); renderExperiment(exp); renderIncubation(inc);
     renderPositions(s); renderConditions(s); renderTrips(trips); renderExpect(s);
     document.getElementById("updated").textContent =
       new Date().toLocaleTimeString("ko-KR")+" 기준 · 헌장 "+((s.bot||{}).charter_version||"");
