@@ -19,12 +19,17 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from incubation.progress import report, format_text          # noqa: E402
+from incubation import cohort                                 # noqa: E402
 from safety.notifier import TelegramNotifier                  # noqa: E402
 
 
 def main() -> int:
     rep = report()
     text = format_text(rep)
+    # v4.0: 실험 트랙(breakout) 코호트 리포트를 붙인다 — 주간 튜닝 세션의 근거 자료
+    exp = cohort.report()
+    if exp["n"]:
+        text += "\n\n" + exp["text"]
     TelegramNotifier().send(text)
     print(text)
     # 판정이 '중단 검토'면 종료코드 1 → cron 로그/모니터링에서 눈에 띈다

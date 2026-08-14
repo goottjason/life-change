@@ -82,6 +82,17 @@ def api_incubation() -> dict:
     return rep
 
 
+@app.get(PREFIX + "/api/experiment")
+def api_experiment() -> dict:
+    """
+    실험 트랙(breakout) 코호트 리포트 (v4.0 §3.5) — "어떤 조건의 돌파가 손실인가".
+    진입 컨텍스트를 축(추세·거래량비·시간대·종목·설정)별로 쪼개 승률·거래당 손익을 본다.
+    주간 튜닝 세션의 근거 자료다.
+    """
+    from incubation.cohort import report as cohort_report
+    return cohort_report()
+
+
 @app.get(PREFIX + "/api/roundtrips")
 def api_roundtrips(limit: int = 50, scope: str = "current") -> list[dict]:
     return service.round_trips(min(limit, 200), scope=scope)
