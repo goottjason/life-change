@@ -45,15 +45,16 @@ def _breakout_pos(entry=100.0, atr=0.3):
 
 
 def test_breakout_trailing_stop_exits_below_high_minus_atr():
-    """고점 − trail×진입ATR(캘리브레이션 2.0) 하회 시 청산.
+    """고점 − trail×진입ATR(v4.1: 3.0) 하회 시 청산.
     수익 중이면 take_profit, 손실이면 stop_loss."""
-    pos = _breakout_pos(entry=100.0, atr=0.3)      # 트레일 거리 = 2.0×0.3 = 0.6
+    pos = _breakout_pos(entry=100.0, atr=0.3)      # 트레일 거리 = 3.0×0.3 = 0.9
     pos.update_high(102.0)
-    assert pos.check_price_exit(101.7) == ExitReason.NONE         # 102−0.6=101.4 위
-    assert pos.check_price_exit(101.3) == ExitReason.TAKE_PROFIT  # 진입가 위에서 트레일 이탈
+    assert pos.check_price_exit(101.5) == ExitReason.NONE         # 102−0.9=101.1 위
+    assert pos.check_price_exit(101.0) == ExitReason.TAKE_PROFIT  # 진입가 위에서 트레일 이탈
     pos2 = _breakout_pos(entry=100.0, atr=0.3)
     pos2.update_high(100.0)                         # 고점 갱신 없이 하락
-    assert pos2.check_price_exit(99.3) == ExitReason.STOP_LOSS    # 100−0.6=99.4 아래, 손실
+    # 트레일 100−0.9=99.1 vs 고정 백스톱 max(1×ATR/가격, 1%)=1% → 99.0. 둘 중 위인 99.1이 잡는다
+    assert pos2.check_price_exit(99.0) == ExitReason.STOP_LOSS
 
 
 def test_breakout_no_fixed_take_profit():
@@ -66,7 +67,7 @@ def test_breakout_no_fixed_take_profit():
 def test_breakout_hard_stop_backstop():
     """트레일보다 고정 손절(sl_ratio = max(1×ATR/가격, 1%))이 위에 있으면 그쪽이 잡는다."""
     pos = _breakout_pos(entry=100.0, atr=2.0)
-    # atr=2.0 → sl_ratio = max(1.0×2/100, 1%) = 2% → 고정손절 98.0 · 트레일 100−4=96.0 → 98이 위
+    # atr=2.0 → sl_ratio = max(1.0×2/100, 1%) = 2% → 고정손절 98.0 · 트레일 100−6=94.0 → 98이 위
     assert pos.check_price_exit(97.9) == ExitReason.STOP_LOSS
 
 

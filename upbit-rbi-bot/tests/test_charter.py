@@ -366,7 +366,8 @@ def test_v4_breakout_spec():
     # 캘리브레이션 확정값 (lab_breakout.py 2026-08-14: 하루 4.9건 · net −0.189%/거래)
     assert spec.breakout_bars == 288
     assert spec.vol_mult == 5.0
-    assert spec.trail_atr_mult == 2.0
+    # v4.1 1차 튜닝: 실거래 22건 검증으로 trail 2.0 → 3.0 (좁은 손절에 털림)
+    assert spec.trail_atr_mult == 3.0
     assert spec.time_stop_bars == 12
     assert spec.time_stop_min_profit == 0.003
     assert spec.min_atr_ratio == 0.0        # 변동성 게이트 없음 — rsi2를 죽인 관문을 여기선 안 둔다

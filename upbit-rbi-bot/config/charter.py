@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
-CHARTER_VERSION = "v4.0"
+CHARTER_VERSION = "v4.1"
 
 # ── 자본·수수료 (헌장 §1, §13) ────────────────────────────────
 # 자본은 더 이상 고정값이 아니라 '실계좌 잔고(총 자산)'를 런타임에 읽어서 쓴다 (헌장 v1.1 §7.1).
@@ -446,8 +446,15 @@ STRATEGY_SPECS: dict[str, StrategySpec] = {
                              min_atr_ratio=0.0, time_stop_bars=12,
                              use_dead_extras=False, always_active=True,
                              timeframe="minute5",
-                             breakout_bars=288, vol_mult=5.0, trail_atr_mult=2.0,
+                             breakout_bars=288, vol_mult=5.0, trail_atr_mult=3.0,
                              time_stop_min_profit=0.003),
+    # v4.1 (2026-08-18, 1차 주간 튜닝) — trail 2.0 → **3.0**×ATR.
+    #   실거래 22왕복(8/15~18) 검증: 진입 시점 ATR 중앙 0.14% → 트레일 폭 중앙 0.26% 로
+    #   5분봉 잔물결에 털렸다. 손절 14건 중 43%가 청산 2시간 뒤 진입가 위로 복귀.
+    #   22건 재생: trail 2.0 → +0.128%/거래 · 3.0 → **+0.141%** · 4.0 → +0.099% (3.0 최선).
+    #   시간손절 12봉은 늘리면 나빠져 유지(24봉 +0.087% · 없음 +0.032%).
+    #   ⚠ 표본 22건 — 판정이 아니라 '근거가 가장 뚜렷하고 되돌리기 쉬운 한 축'만 조정한 것.
+    #   돌파폭 최소 조건(≥0.15%)은 30건 넘어 코호트로 확인 후 결정(스펙 튜닝 로그).
 }
 
 # 가동 전략 (v1.4) — macd/rsi/cvd 는 장기·walk-forward·국면분해에서 모두 음의 기댓값으로
