@@ -47,6 +47,10 @@ def test_eligible_fetches_then_caches():
             return markets
         def _apply_spread_filter(self, candidates):
             return candidates
+        def _flagged(self):
+            # 실제 업비트 투자경고 API 를 타면 그날 플래그 상태에 따라 결과가 바뀐다
+            # (2026-08-19 ETH 투자주의로 실제 깨짐) → 스텁으로 결정적으로 만든다
+            return set()
     s = S(top_n=2, min_turnover=0, refresh_sec=999, exclude={"USDT"})
     assert s.eligible() == ["KRW-BTC", "KRW-ETH"]
     s.eligible()

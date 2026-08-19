@@ -180,8 +180,9 @@ class Trader:
     # ── 1 tick ───────────────────────────────────────────────
     def tick(self) -> None:
         # 0. 안전장치
-        if self.risk.s.halted:
-            return
+        # ⚠ v4.1: halted(§5.4 전면정지)여도 **return 하지 않는다**. 정지의 뜻은 '신규 진입 금지'
+        #   (risk.can_enter 가 막는다)이지 '보유 포지션 방치'가 아니다. 이전엔 여기서 바로
+        #   return 해서, MDD 자동정지 순간부터 들고 있던 코인은 손절선 없이 방치됐다.
         self.failsafe.heartbeat.beat()
         if not self.failsafe.check_feed():
             return
@@ -203,18 +204,33 @@ class Trader:
                                  for s in self.strategies.values()
                                  if s.spec.timeframe == tf))
                   for tf in timeframes}
+        # ★ 순회 대상 = 유니버스 ∪ **보유 종목** (v4.1, 2026-08-18 VVV 사고).
+        #   유니버스만 돌면, 산 뒤에 스크리너에서 빠진 종목(투자주의 플래그·스프레드 악화·
+        #   거래대금 하락·상한 밀림 등 어떤 사유든)은 캔들 조회·청산 판정·가격 갱신이 전부
+        #   멈춰 손절선 없는 포지션이 된다. 실제로 VVV 가 −1% 손절선을 지나 −8% 까지 방치됐다.
+        #   보유 종목은 유니버스 밖이어도 **청산만** 관리한다(신규 진입은 유니버스 종목만).
+        universe = list(self.screener.eligible())
+        held_only = [m for m in {p.market for p in self.positions.values()} if m not in universe]
         seen: set[str] = set()
-        for market in self.screener.eligible():
+        for market in universe + sorted(held_only):
             frames: dict[str, pd.DataFrame] = {}
             for tf in timeframes:
                 try:
-                    frames[tf] = self.client.get_candles(market, interval=tf,
-                                                         count=counts[tf])
+                    df = self.client.get_candles(market, interval=tf, count=counts[tf])
+                    if df is not None and len(df):
+                        frames[tf] = df
                 except Exception as e:
                     self.failsafe.on_api_error(e)
             if not frames:
                 continue
-            self._process_market(market, frames)
+            # 한 종목의 처리 예외가 같은 tick 의 나머지 종목(특히 보유 종목의 손절 판정)을
+            # 건너뛰게 하면 안 된다 — 종목 단위로 격리한다.
+            try:
+                self._process_market(market, frames, allow_entry=market in universe)
+            except Exception as e:
+                self.failsafe.on_api_error(e)
+                self.logger.log("tick_error", market=market, reason=f"{type(e).__name__}: {e}")
+                continue
             seen.add(market)
         # 이번 tick 에 판정하지 않은 종목의 진단은 버린다. 남겨두면 유니버스에서 빠진 종목이
         # 대시보드에 '갱신되지 않는 행'으로 계속 떠서, 운영자가 낡은 RSI2·ATR%를 현재값으로 읽는다.
@@ -246,11 +262,12 @@ class Trader:
         self.trend_up[market] = up
         return {"trend_up": up}
 
-    def _process_market(self, market: str, frames: dict) -> None:
+    def _process_market(self, market: str, frames: dict, allow_entry: bool = True) -> None:
         """
         frames: {타임프레임: 캔들} — 전략마다 자기 타임프레임의 캔들로 판단한다 (v1.4).
         청산도 그 포지션을 만든 전략의 타임프레임으로 판정해야 백테스트와 일치한다
         (시간손절 봉 수·ATR·신호가 모두 봉 단위이므로).
+        allow_entry=False 면 청산만 관리한다 — 유니버스 밖 보유 종목 (v4.1).
         """
         # DataFrame 은 `or` 로 평가할 수 없다(진리값 모호) → 명시적 None 검사
         base = frames.get(C.BASE_TIMEFRAME)
@@ -298,6 +315,13 @@ class Trader:
         def blocked(strategy: str, why: str) -> None:
             """판정까지 가지 못하고 막힌 전략도 이유는 남긴다(행이 통째로 사라지지 않게)."""
             view[strategy] = {"action": Action.HOLD.value, "reason": why}
+
+        if not allow_entry:
+            # 유니버스 밖(플래그·스프레드 등) 보유 종목: 청산은 위에서 했고 진입은 금지.
+            # 청산 직후 같은 tick 에 다른 전략이 되사는 구멍도 여기서 막힌다.
+            for name in self.strategies:
+                blocked(name, "유니버스 밖 — 청산만 관리 (신규 진입 금지)")
+            return
 
         for name, strat in self.strategies.items():
             df = frames.get(strat.spec.timeframe)
