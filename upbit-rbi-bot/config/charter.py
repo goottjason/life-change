@@ -10,13 +10,20 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
-CHARTER_VERSION = "v4.2"
+CHARTER_VERSION = "v4.3"
 
 # ── 자본·수수료 (헌장 §1, §13) ────────────────────────────────
 # 자본은 더 이상 고정값이 아니라 '실계좌 잔고(총 자산)'를 런타임에 읽어서 쓴다 (헌장 v1.1 §7.1).
 # 아래 값은 DRY_RUN(모의) 및 계좌 조회 실패 시의 폴백 기본값일 뿐이다.
 DEFAULT_CAPITAL_KRW = 90_000        # 폴백 기본 자본 (실전에선 계좌 잔고로 대체됨)
-ALLOC_PER_STRATEGY_RATIO = 2 / 3    # 검증 트랙 배분 상한 (§7.1, v4.0). 실험 첫 슬롯(30,000원)
+ALLOC_PER_STRATEGY_RATIO = 1 / 2    # 검증 트랙 배분 상한 (§7.1, v4.3에서 2/3 → 1/2)
+                                    # ★ v4.3 축소 근거 (2026-08-24 실거래): rsi2 계열이 8/15 이후
+                                    #   12거래 −2,357원이고 **단일 손실 상위 4건이 전부 rsi2**였다
+                                    #   (−1,967 / −1,759 / −1,727 / −1,028원, 전부 8/22 XRP).
+                                    #   실효 리스크 min(f 2.4%, 2/3×2.5%) = 1.67% 를 **실전 미검증
+                                    #   엣지**에 걸고 있었다 → 1/2×2.5% = **1.25%** 로 낮춘다.
+                                    #   인큐베이션은 거래당 %성적을 보므로 표본은 오염되지 않는다.
+                                    #   남는 여유(1 − 1/2 − 1/3 = 1/6)는 실험 2번째 슬롯이 쓴다.
                                     # 침범 방지. ⚠ 실효 리스크 = min(f, 배분×손절거리)
                                     # = min(2.4%, 0.667×2.5%) ≈ **1.67%** — f 2.4% 가 온전히
                                     # 실리지 않음을 알고 감수한다. 두 트랙이 한 계좌를 공유하는
@@ -57,7 +64,7 @@ MAX_CONSECUTIVE_LOSSES = 12         # 연속 손절 차단 (§5.3, v3.0 값 유�
 # ── 트랙별 동시 포지션 (§5.5, v4.0) ──────────────────────────
 MAX_POSITIONS_VALIDATED = 1         # 검증 트랙 (v3.0 의 MAX_CONCURRENT_POSITIONS=1 승계.
                                     # 1 로 줄인 근거는 2026-08-06 실효 리스크 분석 — git 이력 참조)
-MAX_POSITIONS_EXPERIMENTAL = 3      # 실험 트랙 (예산 = 3 × EXPERIMENT_MAX_ORDER_KRW)
+MAX_POSITIONS_EXPERIMENTAL = 3      # 실험 트랙 (건당 금액은 experiment_position_krw, v4.3)
 MAX_CONCURRENT_POSITIONS = MAX_POSITIONS_VALIDATED + MAX_POSITIONS_EXPERIMENTAL
 
 # 검증 트랙 동시 최대 위험. 실험 트랙 히트는 f 가 아니라 주문 상한으로 바운드된다
@@ -441,7 +448,7 @@ STRATEGY_SPECS: dict[str, StrategySpec] = {
     #     → 건당 1만원 기준 월 예상 수업료 약 −2,772원 (운영자 승인 예정 수치)
     # ⚠ 과거 연구(14차 H4)에서 돌파 계열 롱은 유의하게 음수였고 이 시작값도 net 음수다.
     #   이 트랙의 산출물은 수익이 아니라 "어떤 조건의 돌파가 손실인가"의 실거래 데이터다.
-    #   주문은 EXPERIMENT_MAX_ORDER_KRW(10,000원)로 강제 제한된다.
+    #   주문금액은 experiment_position_krw() 로 강제 제한된다(자본 비율 기반, v4.3).
     "breakout": StrategySpec("breakout", atr_stop_mult=1.0, rr=0.0, regime=Regime.TREND,
                              min_atr_ratio=0.0, time_stop_bars=12,
                              use_dead_extras=False, always_active=True,
@@ -502,15 +509,39 @@ INCUBATING_STRATEGIES: frozenset[str] = frozenset()
 # 이 트랙의 1차 산출물은 수익이 아니라 **튜닝 데이터**다(진입 컨텍스트 전수 기록 → 주간
 # 코호트 리포트). 운영자 의도: "자주 거래하며 그 안에서 문제점을 튜닝하며 다듬어간다."
 EXPERIMENTAL_STRATEGIES: frozenset[str] = frozenset({"breakout"})
-# v4.2 (2026-08-22, 운영자 결정): 10,000 → 30,000원 (자본의 약 1/3).
-#   근거: v4.1 실측 — breakout 2개 이상 동시 보유는 시간의 9%(3개는 4%), 검증 트랙과
-#   겹침 0% → 시드 대부분이 놀고 있었다. 손절 평균 −1.15% × 3만원 ≈ −350원(자본 0.37%),
-#   일일 서킷(−5%)까지 손절 13건 여유. 대가: 엣지가 백테스트 수준(−0.19%)으로 돌아가면
-#   수업료도 3배(월 ≈ −8,400원). 운영자가 알고 선택("잃어도 되는 시드").
-#   ⚠ 3슬롯 만석 시 3×30,000 = 시드 전부다. 배분 불변식은 '각 트랙 첫 슬롯 동시 보장'
-#     (검증 2/3 + 실험 1/3 = 1.0)으로 정의하고, 실험 2·3번째 슬롯은 주문가능 원화
-#     클램프(position_size_krw의 available_krw)가 선착순으로 줄이거나 건너뛴다.
-EXPERIMENT_MAX_ORDER_KRW = 30_000   # 실험 트랙 건당 주문 상한 (지문 포함 — 승인 대상)
+# ── 실험 트랙 주문금액 (v4.3, 2026-08-24) — **고정 원화 → 자본 비율** ─────
+# v4.2 까지는 `EXPERIMENT_MAX_ORDER_KRW = 30_000` 고정이었다. 그러면 입금해서 시드를
+# 키워도 실험 트랙만 영영 3만원에 묶인다(운영자 지적). 자본은 매 tick 실계좌 잔고로
+# 읽히므로(§7.1), 주문금액도 **비율로 정의하면 자동으로 따라 커진다.**
+#
+# 주문금액 = min( 자본 × ALLOC , 자본 × RISK ÷ 손절거리 )
+#   ① ALLOC(1/3) — 한 건에 자본의 1/3 이상은 넣지 않는다 (집중도 상한)
+#   ② RISK(0.33%) — **거래당 잃는 돈을 자본의 0.33% 로 고정**한다 (변동성 정규화)
+#
+# ★ ② 를 넣는 이유 (2026-08-24 실측): v4.2 는 주문이 3만원 고정인데 손절폭은 종목
+#   변동성(ATR)에 비례해서, 거래당 실제 위험이 **300원~750원으로 2.5배** 널뛰었다.
+#   PROM(ATR 2.39%) 이 −847원 난 게 정확히 이 경우다. ② 가 있으면 변동성이 큰 종목은
+#   주문이 자동으로 줄어 손실 크기가 일정해진다.
+#   실거래 45건 재적용: 40건은 그대로(≈3만원), 변동성 큰 5건만 축소(PROM 3만→1.2만),
+#   표본 손익 4,253 → 4,517원으로 오히려 개선.
+#
+# 자본이 커지면: 9만원 → 한 건 약 3만원 / 30만원 → 약 10만원 / 90만원 → 약 30만원.
+EXPERIMENTAL_STRATEGIES: frozenset[str] = frozenset({"breakout"})
+EXPERIMENT_ALLOC_RATIO = 1 / 3      # ① 한 건 최대 = 자본의 1/3
+EXPERIMENT_RISK_RATIO = 0.0033      # ② 거래당 위험 = 자본의 0.33% (9만원 기준 약 300원)
+
+
+def experiment_position_krw(capital: float | None, stop_ratio: float | None) -> float:
+    """
+    실험 트랙 주문금액 (v4.3). 자본에 비례하므로 입금하면 자동으로 커진다.
+    stop_ratio 를 모르면(호출부가 안 넘기면) 배분 상한만 적용한다 — 위험 정규화는
+    손절거리를 알아야 성립하기 때문이다.
+    """
+    cap = capital if capital and capital > 0 else float(DEFAULT_CAPITAL_KRW)
+    alloc_cap = cap * EXPERIMENT_ALLOC_RATIO
+    if not stop_ratio or stop_ratio <= 0:
+        return alloc_cap
+    return min(alloc_cap, cap * EXPERIMENT_RISK_RATIO / stop_ratio)
 
 
 def track_of(strategy: str) -> str:
@@ -518,12 +549,19 @@ def track_of(strategy: str) -> str:
     return "experimental" if strategy in EXPERIMENTAL_STRATEGIES else "validated"
 
 
-def position_cap_for(strategy: str, krw: float) -> float:
-    """인큐베이션은 최소주문금액(§11-3), 실험 트랙은 EXPERIMENT_MAX_ORDER_KRW(v4.0)로 묶는다."""
+def position_cap_for(strategy: str, krw: float,
+                    capital: float | None = None,
+                    stop_ratio: float | None = None) -> float:
+    """
+    전략 범주별 주문금액 상한.
+      · 인큐베이션 → 최소주문금액 (§11-3)
+      · 실험 트랙  → experiment_position_krw() = min(자본×1/3, 자본×0.33%÷손절폭) (v4.3)
+    capital 을 주지 않으면 폴백 기본자본을 쓴다(테스트·오프라인 경로 호환).
+    """
     if strategy in INCUBATING_STRATEGIES:
         return min(krw, float(MIN_ORDER_KRW))
     if strategy in EXPERIMENTAL_STRATEGIES:
-        return min(krw, float(EXPERIMENT_MAX_ORDER_KRW))
+        return min(krw, experiment_position_krw(capital, stop_ratio))
     return krw
 
 
@@ -563,7 +601,8 @@ def charter_fingerprint() -> str:
         #   실효는 0.83% 그대로였다. 승인 대상에서 빠지면 같은 일이 조용히 반복된다.
         f"alloc={ALLOC_PER_STRATEGY_RATIO!r}",
         # v4.0 실험 트랙 — 주문 상한·트랙별 동시보유도 실계좌 노출을 직접 결정한다
-        f"exp_cap={EXPERIMENT_MAX_ORDER_KRW!r}",
+        f"exp_alloc={EXPERIMENT_ALLOC_RATIO!r}",
+        f"exp_risk={EXPERIMENT_RISK_RATIO!r}",
         f"maxpos_v={MAX_POSITIONS_VALIDATED!r}",
         f"maxpos_e={MAX_POSITIONS_EXPERIMENTAL!r}",
     ]) + ")")

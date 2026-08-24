@@ -92,9 +92,10 @@ def test_가동전략은_검증·인큐베이션·실험_중_하나여야_한다
                | C.EXPERIMENTAL_STRATEGIES)
     unproven = set(C.ACTIVE_STRATEGIES) - allowed
     assert not unproven, f"§11 근거 없이 가동 중인 전략: {unproven}"
-    # 실험 트랙은 반드시 상한이 강제된다 (사이징이 얼마를 내놓든 EXPERIMENT_MAX_ORDER_KRW)
+    # 실험 트랙은 반드시 상한이 강제된다 (사이징이 얼마를 내놓든 자본 비율 상한 이하)
     for name in C.EXPERIMENTAL_STRATEGIES:
-        assert C.position_cap_for(name, 1e9) == C.EXPERIMENT_MAX_ORDER_KRW
+        cap = C.position_cap_for(name, 1e9, capital=90_000, stop_ratio=0.01)
+        assert cap <= 90_000 * C.EXPERIMENT_ALLOC_RATIO
 
 
 def test_easy_teaching은_아직_검증전략이_아니다():

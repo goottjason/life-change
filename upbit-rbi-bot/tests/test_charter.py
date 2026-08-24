@@ -52,7 +52,7 @@ def test_allocation_does_not_exceed_capital():
     폐기 — 실험 2·3번째 슬롯은 주문가능 원화 클램프가 선착순으로 줄이거나 건너뛴다
     (현물·무레버리지라 초과 배정은 '주문 축소'로만 나타나고 빚이 되지 않는다)."""
     validated = C.ALLOC_PER_STRATEGY_RATIO * C.MAX_POSITIONS_VALIDATED
-    first_experimental = C.EXPERIMENT_MAX_ORDER_KRW / C.DEFAULT_CAPITAL_KRW
+    first_experimental = C.EXPERIMENT_ALLOC_RATIO
     assert validated + first_experimental <= 1.0 + 1e-9
 
 
@@ -346,7 +346,9 @@ def test_validated_symbol_gets_its_own_spread_cap():
 def test_v4_experimental_track_constants():
     """v4.0: 실험 트랙 — 검증 없이 가동 가능하되 주문금액 상한이 강제되는 공식 실험 차선."""
     assert C.EXPERIMENTAL_STRATEGIES == frozenset({"breakout"})
-    assert C.EXPERIMENT_MAX_ORDER_KRW == 30_000   # v4.2: 1만→3만 (운영자 결정 2026-08-22)
+    # v4.3: 고정 원화 → 자본 비율 (입금하면 자동 스케일)
+    assert C.EXPERIMENT_ALLOC_RATIO == 1 / 3
+    assert C.EXPERIMENT_RISK_RATIO == 0.0033
     assert C.MAX_POSITIONS_VALIDATED == 1
     assert C.MAX_POSITIONS_EXPERIMENTAL == 3
     assert C.MAX_CONCURRENT_POSITIONS == 4          # 트랙 합
@@ -357,8 +359,16 @@ def test_v4_experimental_track_constants():
 
 def test_v4_experiment_order_cap_enforced():
     """실험 트랙은 사이징 결과와 무관하게 10,000원을 넘을 수 없다 (easy_teaching 사고 재발 방지)."""
-    assert C.position_cap_for("breakout", 90_000.0) == 30_000.0   # v4.2
-    assert C.position_cap_for("breakout", 7_000.0) == 7_000.0
+    # v4.3: 자본 9만원·손절 1% → min(3만, 297/0.01=29,700) = 29,700원
+    assert round(C.position_cap_for("breakout", 90_000.0, capital=90_000, stop_ratio=0.01)) == 29_700
+    # 변동성 큰 종목(손절 2.39%)은 자동 축소 → 297/0.0239 ≈ 12,427원
+    assert round(C.position_cap_for("breakout", 90_000.0, capital=90_000, stop_ratio=0.0239)) == 12_427
+    # ★ 자본이 커지면 그대로 따라 커진다 (운영자 요구: 증액 시 자동 스케일)
+    assert round(C.position_cap_for("breakout", 1e9, capital=300_000, stop_ratio=0.01)) == 99_000
+    assert round(C.position_cap_for("breakout", 1e9, capital=900_000, stop_ratio=0.01)) == 297_000
+    # 손절폭이 아주 좁으면 배분 상한(1/3)이 먼저 구속한다
+    assert C.position_cap_for("breakout", 1e9, capital=90_000, stop_ratio=0.001) == 30_000.0
+    assert C.position_cap_for("breakout", 7_000.0, capital=90_000, stop_ratio=0.01) == 7_000.0
     assert C.position_cap_for("rsi2", 90_000.0) == 90_000.0   # 검증 트랙은 불변
 
 
@@ -385,10 +395,10 @@ def test_v4_breakout_spec():
 def test_v4_fingerprint_covers_experiment_params():
     """실험 트랙 상한도 승인 대상 — 상한을 몰래 올리면 지문이 바뀌어 모의로 떨어져야 한다."""
     before = C.charter_fingerprint()
-    orig = C.EXPERIMENT_MAX_ORDER_KRW
+    orig = C.EXPERIMENT_RISK_RATIO
     try:
-        C.EXPERIMENT_MAX_ORDER_KRW = 50_000
+        C.EXPERIMENT_RISK_RATIO = 0.01
         assert C.charter_fingerprint() != before
     finally:
-        C.EXPERIMENT_MAX_ORDER_KRW = orig
+        C.EXPERIMENT_RISK_RATIO = orig
     assert C.charter_fingerprint() == before

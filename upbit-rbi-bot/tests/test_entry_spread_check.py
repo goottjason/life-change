@@ -156,4 +156,4 @@ def test_헌장_풀_확대값():
     # (검증 2/3 + 실험 1건 1/3 = 1.0. 실험 2·3번째 슬롯은 잔고 클램프 선착순)
     assert C.MAX_CONCURRENT_POSITIONS >= 1
     assert (C.ALLOC_PER_STRATEGY_RATIO * C.MAX_POSITIONS_VALIDATED
-            + C.EXPERIMENT_MAX_ORDER_KRW / C.DEFAULT_CAPITAL_KRW) <= 1.0 + 1e-9
+            + C.EXPERIMENT_ALLOC_RATIO) <= 1.0 + 1e-9

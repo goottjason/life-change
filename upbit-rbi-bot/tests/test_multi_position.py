@@ -229,4 +229,4 @@ def test_breakout_entry_logs_context_json():
     assert {"fingerprint", "spread_pct", "vol_ratio", "breakout_pct"} <= set(ctx)
     assert ctx["fingerprint"] == C.charter_fingerprint()
     # 실험 트랙 주문 상한 강제 (§3.5): 사이징이 얼마를 내놓든 10,000원을 넘지 않는다
-    assert entries[0]["size_krw"] <= C.EXPERIMENT_MAX_ORDER_KRW
+    assert entries[0]["size_krw"] <= 90_000 * C.EXPERIMENT_ALLOC_RATIO

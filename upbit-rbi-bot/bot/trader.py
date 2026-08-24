@@ -400,7 +400,9 @@ class Trader:
         else:
             stop_ratio = C.stop_ratio_for(strat.spec, entry_atr, price)
         krw = self.risk.size_for(stop_ratio)                # §7.2 (ATR 정규화 v1.2)
-        krw = C.position_cap_for(name, krw)                 # §11-3 인큐베이션이면 5,000원
+        # v4.3: 실험 트랙은 자본 비율 기반 상한 — 자본과 손절폭을 넘겨야 계산된다
+        krw = C.position_cap_for(name, krw, capital=self.risk.s.capital,
+                                 stop_ratio=stop_ratio)
         # 잔고 부족 등으로 주문금액이 최소주문금액 미만이면 조용히 스킵(로그 스팸 방지)
         if krw < C.MIN_ORDER_KRW:
             return
