@@ -18,13 +18,15 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: upbit-rbi-bot/requirements.txt
+          cache-dependency-path: |
+            upbit-rbi-bot/requirements.txt
+            upbit-rbi-bot/constraints.txt
 
       - name: Install
         working-directory: upbit-rbi-bot
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pytest
+          pip install -r requirements.txt -c constraints.txt pytest
 
       - name: Tests
         working-directory: upbit-rbi-bot

@@ -9,8 +9,8 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # 의존성 먼저 (레이어 캐시)
-COPY upbit-rbi-bot/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY upbit-rbi-bot/requirements.txt upbit-rbi-bot/constraints.txt ./
+RUN pip install --no-cache-dir -r requirements.txt -c constraints.txt
 
 # 앱 코드
 COPY upbit-rbi-bot/ .
