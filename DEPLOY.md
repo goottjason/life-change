@@ -13,8 +13,12 @@ life-change/
 ├── Dockerfile              # python:3.11-slim + FastAPI 대시보드 + 봇
 ├── docker-compose.yml      # projects-life-change-1, shared-net, 포트 비공개
 ├── .env.example            # → .env 로 복사 후 키 입력
-├── .github/workflows/deploy.yml   # SSH 자동 배포 (secret: LIFECHANGE_DEPLOY_KEY)
-├── deploy.sh               # 수동/긴급 배포
+├── .github/workflows/deploy.yml   # validate → tests → 서버 ops/deploy.sh (secret: LIFECHANGE_DEPLOY_KEY)
+├── .github/workflows/tests.yml    # pytest (배포 전 게이트)
+├── .github/workflows/images.yml   # arm64 이미지 빌드 → GHCR (서버는 pull 만)
+├── ops/deploy.sh, ops/deploy.conf # 서버 배포 스크립트(잠금·빌드 선행·지문·자동 롤백) + 대상 설정
+├── ops/test/deploy_test.sh        # 배포 스크립트 셸 테스트(배포 때 서버에서 먼저 실행)
+├── deploy.sh               # 수동/긴급 배포 = 위 워크플로 수동 실행 래퍼
 ├── nginx/life-change.location.conf # 공유 nginx 에 추가할 location 블록
 └── upbit-rbi-bot/          # 앱 코드 (dashboard/, bot/, strategies/ ...)
 ```
@@ -58,8 +62,12 @@ curl -k https://168.107.31.154/life-change/health   # → ok
 브라우저: `https://168.107.31.154/life-change/`
 
 ## 이후 배포
-- **자동**: `git push origin main` → Actions 가 SSH 접속 → `git pull && docker compose up -d --build && nginx reload` → 헬스체크.
-- **수동**: 로컬에서 `./deploy.sh`
+- **자동**: `git push origin main` → Actions: 입력 검증 → `pytest` ∥ GitHub arm64 러너가 이미지를 빌드해 `ghcr.io/goottjason/life-change:<커밋 SHA 12자>` 로 푸시 → 둘 다 통과하면 서버에서 커밋 SHA 로 `git reset --hard` → 배포 스크립트 셸 테스트 → `ops/deploy.sh`.
+  - 서버는 **빌드하지 않는다**. 이미지를 pull 해 기존 로컬 이름(`life-change-life-change:latest`)으로 다시 태그한 뒤, 이미지 내용이 바뀐 경우에만 교체한다(문서·워크플로만 바뀐 push 는 이미지가 같아 재시작하지 않음).
+  - 서버 스크립트는 공용 잠금(정비 타이머·다른 프로젝트 배포와 겹치지 않음)을 잡고, 컨테이너를 정상 종료(SIGTERM, 30초)한 뒤 교체한다.
+  - 교체 뒤 nginx 를 통해 `/life-change/health` 를 점검하고, 실패하면 직전 이미지로 자동 롤백한다(종료코드 7=롤백 성공·서비스 정상, 8=롤백도 실패).
+- **수동**: 로컬에서 `./deploy.sh` (워크플로 수동 실행). `./deploy.sh rollback [prev-태그]`, `./deploy.sh skip-tests`, `./deploy.sh recreate`.
+- **롤백**: 서버에 배포마다 `prev-YYYYMMDD-HHMMSS` 이미지 태그가 남는다(최근 3개). 더 오래된 커밋으로는 `./deploy.sh rollback <커밋 SHA 12자>` — 레지스트리에서 그 커밋의 이미지를 받아 되돌린다(재빌드 없음).
 
 ## 헌장 v1.5 배포 시 주의 (전략 교체 · 스프레드/상장경과일 필터 · 15분봉 병행)
 
