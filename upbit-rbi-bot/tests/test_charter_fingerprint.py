@@ -23,6 +23,12 @@ def test_같은_설정이면_지문이_같다():
     assert C.charter_fingerprint() == C.charter_fingerprint()
 
 
+def test_보유_가격_확인_간격도_승인_지문에_포함된다(monkeypatch):
+    before = C.charter_fingerprint()
+    monkeypatch.setattr(C, "HELD_PRICE_EXIT_INTERVAL_SEC", 60)
+    assert C.charter_fingerprint() != before
+
+
 def test_가동전략이_늘면_지문이_바뀐다(monkeypatch):
     """이번 사고의 재발 방지 — 새 전략을 켜면 재승인이 필요해야 한다."""
     before = C.charter_fingerprint()

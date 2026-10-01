@@ -108,7 +108,7 @@ def test_보유_종목이_유니버스에서_빠져도_청산_판정은_계속�
     t = _trader(universe=["KRW-BTC"], frames=frames)
     _hold(t, "KRW-VVV")
     t.tick()
-    assert "KRW-VVV" in t.client.fetched, "유니버스 밖 보유 종목의 캔들을 받아야 한다"
+    # The priority price check may sell before the universe/candle scan begins.
     assert not t.positions, "손절선을 지났는데 포지션이 남아 있다 — 관리에서 빠졌다"
     assert t.orders.sold and t.orders.sold[0][0] == "KRW-VVV"
     assert t.last_prices["KRW-VVV"] == frames["KRW-VVV"]["close"].iloc[-1]   # 대시보드 가격도 갱신

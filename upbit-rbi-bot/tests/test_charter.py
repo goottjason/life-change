@@ -158,7 +158,7 @@ def test_두_전략의_진입선은_분리돼_있어야_한다():
 
 def test_가동전략_목록():
     # v4.0: breakout 은 EXPERIMENTAL — §11 미통과 상태로 가동하되 주문 상한이 강제된다
-    assert C.ACTIVE_STRATEGIES == ("rsi2", "rsi2_15m", "breakout")
+    assert C.ACTIVE_STRATEGIES == ("rsi2", "rsi2_15m")
     # 시간손절은 두 전략이 같은 실제 시간(8시간)을 쓴다 — 검증 조건과 일치
     assert C.time_stop_bars_for(C.STRATEGY_SPECS["rsi2"]) * 5 == \
            C.time_stop_bars_for(C.STRATEGY_SPECS["rsi2_15m"]) * 15
@@ -385,7 +385,8 @@ def test_v4_breakout_spec():
     assert spec.min_atr_ratio == 0.0        # 변동성 게이트 없음 — rsi2를 죽인 관문을 여기선 안 둔다
     assert spec.always_active is True       # 레짐 필터 없음
     assert spec.use_dead_extras is False
-    assert "breakout" in C.ACTIVE_STRATEGIES
+    assert "breakout" not in C.ACTIVE_STRATEGIES  # v4.5: new live entries paused
+    assert set(C.ACTIVE_STRATEGIES) == {"rsi2", "rsi2_15m"}
     # 신규 필드의 기본값은 기존 전략의 동작을 바꾸지 않아야 한다
     rsi2 = C.STRATEGY_SPECS["rsi2"]
     assert rsi2.breakout_bars == 0 and rsi2.vol_mult == 0.0

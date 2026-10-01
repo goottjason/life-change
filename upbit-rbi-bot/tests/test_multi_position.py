@@ -215,7 +215,8 @@ def test_breakout_registered_in_all_strategies():
     from bot.trader import ALL_STRATEGIES
     from strategies.breakout import BreakoutStrategy
     assert ALL_STRATEGIES["breakout"] is BreakoutStrategy
-    assert "breakout" in build_strategies()          # ACTIVE_STRATEGIES 반영
+    assert "breakout" not in build_strategies()      # v4.5: live entries paused
+    assert "breakout" in build_strategies(("breakout",))  # research/recovery retained
 
 
 def test_breakout_entry_logs_context_json():

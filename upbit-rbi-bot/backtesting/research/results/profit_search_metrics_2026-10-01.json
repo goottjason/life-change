@@ -1,0 +1,2695 @@
+{
+  "old_screen": {
+    "cost_mode": "screen",
+    "hypotheses": [
+      {
+        "name": "breakout_base",
+        "family": "breakout",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "breakout_vol6",
+        "family": "breakout",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 6,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "breakout_vol10",
+        "family": "breakout",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 10,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "breakout_trail1.5",
+        "family": "breakout",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 1.5,
+        "btc_gate": false
+      },
+      {
+        "name": "breakout_btc_up",
+        "family": "breakout",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": true
+      },
+      {
+        "name": "breakout_15m",
+        "family": "breakout",
+        "minutes": 15,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 96,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi5_base",
+        "family": "rsi",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi5_entry5",
+        "family": "rsi",
+        "minutes": 5,
+        "level": 5,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi5_exit90",
+        "family": "rsi",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 90,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi5_gate80",
+        "family": "rsi",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.0048,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi15_base",
+        "family": "rsi",
+        "minutes": 15,
+        "level": 3,
+        "gate": 0.01,
+        "exit_level": 70,
+        "stop": 0.03,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi15_entry5",
+        "family": "rsi",
+        "minutes": 15,
+        "level": 5,
+        "gate": 0.01,
+        "exit_level": 70,
+        "stop": 0.03,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi15_exit90",
+        "family": "rsi",
+        "minutes": 15,
+        "level": 3,
+        "gate": 0.01,
+        "exit_level": 90,
+        "stop": 0.03,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi15_no_signal_exit",
+        "family": "rsi",
+        "minutes": 15,
+        "level": 3,
+        "gate": 0.01,
+        "exit_level": 101,
+        "stop": 0.03,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "hourly_momentum",
+        "family": "breakout",
+        "minutes": 60,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 24,
+        "volume": 2,
+        "trail": 3,
+        "btc_gate": true
+      }
+    ],
+    "markets": [
+      "ATOM",
+      "AVAX",
+      "BCH",
+      "BTC",
+      "DOGE",
+      "DOT",
+      "ENS",
+      "ETC",
+      "ETH",
+      "LINK",
+      "NEAR",
+      "ORCA",
+      "SOL",
+      "SUI",
+      "XRP"
+    ],
+    "results": [
+      {
+        "candidate": "breakout_base",
+        "period": "old_first",
+        "n": 2729,
+        "mean_pct": -0.1985832898047477,
+        "win_pct": 29.24148039574936,
+        "pf": 0.6330185954941548,
+        "ci95_week_pct": [
+          -0.28778358587987474,
+          -0.09510605414158378
+        ],
+        "positive_weeks": 7,
+        "weeks": 52,
+        "worst_pct": -3.3970957442210903
+      },
+      {
+        "candidate": "breakout_base",
+        "period": "old_second",
+        "n": 2499,
+        "mean_pct": -0.16182940528959253,
+        "win_pct": 28.731492597038816,
+        "pf": 0.6730183268986697,
+        "ci95_week_pct": [
+          -0.23611116769761795,
+          -0.07979306760592327
+        ],
+        "positive_weeks": 10,
+        "weeks": 52,
+        "worst_pct": -4.110813007354097
+      },
+      {
+        "candidate": "breakout_vol6",
+        "period": "old_first",
+        "n": 2194,
+        "mean_pct": -0.18151827459274794,
+        "win_pct": 30.264357338195076,
+        "pf": 0.6666879542031436,
+        "ci95_week_pct": [
+          -0.2792511043417081,
+          -0.06383003329640898
+        ],
+        "positive_weeks": 7,
+        "weeks": 52,
+        "worst_pct": -3.3970957442210903
+      },
+      {
+        "candidate": "breakout_vol6",
+        "period": "old_second",
+        "n": 2080,
+        "mean_pct": -0.17065186328024112,
+        "win_pct": 28.125,
+        "pf": 0.6661330869676921,
+        "ci95_week_pct": [
+          -0.24455185053333062,
+          -0.09296063379824647
+        ],
+        "positive_weeks": 12,
+        "weeks": 52,
+        "worst_pct": -4.110813007354097
+      },
+      {
+        "candidate": "breakout_vol10",
+        "period": "old_first",
+        "n": 1029,
+        "mean_pct": -0.19154538991048645,
+        "win_pct": 30.12633624878523,
+        "pf": 0.6852771739025951,
+        "ci95_week_pct": [
+          -0.33502947958863494,
+          -0.020642377735641537
+        ],
+        "positive_weeks": 10,
+        "weeks": 52,
+        "worst_pct": -3.1110148530146264
+      },
+      {
+        "candidate": "breakout_vol10",
+        "period": "old_second",
+        "n": 1029,
+        "mean_pct": -0.12461725938741068,
+        "win_pct": 29.54324586977648,
+        "pf": 0.7731359144172123,
+        "ci95_week_pct": [
+          -0.23971991333968762,
+          0.005924418188536702
+        ],
+        "positive_weeks": 14,
+        "weeks": 52,
+        "worst_pct": -4.110813007354097
+      },
+      {
+        "candidate": "breakout_trail1.5",
+        "period": "old_first",
+        "n": 3231,
+        "mean_pct": -0.18410844305619134,
+        "win_pct": 27.26709996904983,
+        "pf": 0.5676296289918781,
+        "ci95_week_pct": [
+          -0.23480923809111723,
+          -0.12568182875490164
+        ],
+        "positive_weeks": 3,
+        "weeks": 52,
+        "worst_pct": -3.498714184653773
+      },
+      {
+        "candidate": "breakout_trail1.5",
+        "period": "old_second",
+        "n": 2929,
+        "mean_pct": -0.17528596364818483,
+        "win_pct": 25.537726186411746,
+        "pf": 0.5510227261743408,
+        "ci95_week_pct": [
+          -0.2229256333782648,
+          -0.12065421320296349
+        ],
+        "positive_weeks": 7,
+        "weeks": 52,
+        "worst_pct": -4.110813007354097
+      },
+      {
+        "candidate": "breakout_btc_up",
+        "period": "old_first",
+        "n": 2181,
+        "mean_pct": -0.2040000833969513,
+        "win_pct": 28.885832187070154,
+        "pf": 0.624210887477299,
+        "ci95_week_pct": [
+          -0.2875819213732066,
+          -0.11788527266933278
+        ],
+        "positive_weeks": 7,
+        "weeks": 52,
+        "worst_pct": -3.1110148530146264
+      },
+      {
+        "candidate": "breakout_btc_up",
+        "period": "old_second",
+        "n": 1628,
+        "mean_pct": -0.21663268400022262,
+        "win_pct": 27.027027027027028,
+        "pf": 0.5529337233216741,
+        "ci95_week_pct": [
+          -0.29202312143041065,
+          -0.1364333284403266
+        ],
+        "positive_weeks": 8,
+        "weeks": 52,
+        "worst_pct": -3.698386082816185
+      },
+      {
+        "candidate": "breakout_15m",
+        "period": "old_first",
+        "n": 1328,
+        "mean_pct": -0.28738852814322124,
+        "win_pct": 25.451807228915662,
+        "pf": 0.5807897883783365,
+        "ci95_week_pct": [
+          -0.4114713501149913,
+          -0.16314159452430646
+        ],
+        "positive_weeks": 8,
+        "weeks": 52,
+        "worst_pct": -3.6259492036814223
+      },
+      {
+        "candidate": "breakout_15m",
+        "period": "old_second",
+        "n": 1267,
+        "mean_pct": -0.214275536773463,
+        "win_pct": 24.230465666929753,
+        "pf": 0.6515826415928364,
+        "ci95_week_pct": [
+          -0.31940740332294504,
+          -0.09536862430866352
+        ],
+        "positive_weeks": 16,
+        "weeks": 52,
+        "worst_pct": -4.934010945539735
+      },
+      {
+        "candidate": "rsi5_base",
+        "period": "old_first",
+        "n": 875,
+        "mean_pct": 0.0987491583097165,
+        "win_pct": 66.51428571428572,
+        "pf": 1.2208813131138379,
+        "ci95_week_pct": [
+          -0.015280782558681828,
+          0.19916459762607375
+        ],
+        "positive_weeks": 29,
+        "weeks": 53,
+        "worst_pct": -2.7000000000000135
+      },
+      {
+        "candidate": "rsi5_base",
+        "period": "old_second",
+        "n": 644,
+        "mean_pct": 0.10513876536602446,
+        "win_pct": 57.7639751552795,
+        "pf": 1.3149800721478384,
+        "ci95_week_pct": [
+          0.03145799209739261,
+          0.16816848882767088
+        ],
+        "positive_weeks": 31,
+        "weeks": 51,
+        "worst_pct": -2.7000000000000135
+      },
+      {
+        "candidate": "rsi5_entry5",
+        "period": "old_first",
+        "n": 1350,
+        "mean_pct": 0.021493779138261566,
+        "win_pct": 64.14814814814814,
+        "pf": 1.0458668427674362,
+        "ci95_week_pct": [
+          -0.07374361055580181,
+          0.10273439340345564
+        ],
+        "positive_weeks": 22,
+        "weeks": 53,
+        "worst_pct": -2.7000000000000135
+      },
+      {
+        "candidate": "rsi5_entry5",
+        "period": "old_second",
+        "n": 972,
+        "mean_pct": 0.07875365270572,
+        "win_pct": 56.06995884773662,
+        "pf": 1.2169205763499713,
+        "ci95_week_pct": [
+          0.01697900105506842,
+          0.1372243517707497
+        ],
+        "positive_weeks": 32,
+        "weeks": 51,
+        "worst_pct": -2.7000000000000135
+      },
+      {
+        "candidate": "rsi5_exit90",
+        "period": "old_first",
+        "n": 835,
+        "mean_pct": 0.1478034023430499,
+        "win_pct": 65.26946107784431,
+        "pf": 1.220705278882351,
+        "ci95_week_pct": [
+          0.002397796648357071,
+          0.25037754410706525
+        ],
+        "positive_weeks": 21,
+        "weeks": 53,
+        "worst_pct": -2.7000000000000135
+      },
+      {
+        "candidate": "rsi5_exit90",
+        "period": "old_second",
+        "n": 577,
+        "mean_pct": 0.07098016647962617,
+        "win_pct": 57.019064124783355,
+        "pf": 1.1387089920174767,
+        "ci95_week_pct": [
+          -0.03832245849089655,
+          0.16084769390143064
+        ],
+        "positive_weeks": 23,
+        "weeks": 51,
+        "worst_pct": -2.7000000000000135
+      },
+      {
+        "candidate": "rsi5_gate80",
+        "period": "old_first",
+        "n": 1486,
+        "mean_pct": 0.025032072266606035,
+        "win_pct": 64.06460296096904,
+        "pf": 1.0627324656471826,
+        "ci95_week_pct": [
+          -0.0593215263366374,
+          0.09777925055538211
+        ],
+        "positive_weeks": 22,
+        "weeks": 53,
+        "worst_pct": -2.7000000000000135
+      },
+      {
+        "candidate": "rsi5_gate80",
+        "period": "old_second",
+        "n": 979,
+        "mean_pct": 0.024485741788725052,
+        "win_pct": 55.362614913176714,
+        "pf": 1.0752311296017125,
+        "ci95_week_pct": [
+          -0.039625485102204254,
+          0.08395608399396512
+        ],
+        "positive_weeks": 30,
+        "weeks": 51,
+        "worst_pct": -2.7000000000000135
+      },
+      {
+        "candidate": "rsi15_base",
+        "period": "old_first",
+        "n": 670,
+        "mean_pct": 0.30145862750682373,
+        "win_pct": 69.1044776119403,
+        "pf": 1.4915541571854118,
+        "ci95_week_pct": [
+          0.14838195295237364,
+          0.4430820314721356
+        ],
+        "positive_weeks": 32,
+        "weeks": 52,
+        "worst_pct": -3.350000000000014
+      },
+      {
+        "candidate": "rsi15_base",
+        "period": "old_second",
+        "n": 228,
+        "mean_pct": -0.0701368458083766,
+        "win_pct": 54.824561403508774,
+        "pf": 0.9021709927176234,
+        "ci95_week_pct": [
+          -0.23623465555790948,
+          0.088684539638254
+        ],
+        "positive_weeks": 24,
+        "weeks": 50,
+        "worst_pct": -3.350000000000003
+      },
+      {
+        "candidate": "rsi15_entry5",
+        "period": "old_first",
+        "n": 1074,
+        "mean_pct": 0.11887557218162896,
+        "win_pct": 64.8975791433892,
+        "pf": 1.1753920889839435,
+        "ci95_week_pct": [
+          -0.002561003164997279,
+          0.224719937130303
+        ],
+        "positive_weeks": 28,
+        "weeks": 52,
+        "worst_pct": -3.350000000000014
+      },
+      {
+        "candidate": "rsi15_entry5",
+        "period": "old_second",
+        "n": 356,
+        "mean_pct": -0.06909412864343677,
+        "win_pct": 57.58426966292135,
+        "pf": 0.9038428138518897,
+        "ci95_week_pct": [
+          -0.2461217699135232,
+          0.08733743547777859
+        ],
+        "positive_weeks": 21,
+        "weeks": 50,
+        "worst_pct": -3.350000000000014
+      },
+      {
+        "candidate": "rsi15_exit90",
+        "period": "old_first",
+        "n": 658,
+        "mean_pct": 0.287819614778761,
+        "win_pct": 65.34954407294833,
+        "pf": 1.3084276471896759,
+        "ci95_week_pct": [
+          -0.011249912463386509,
+          0.5245178972731661
+        ],
+        "positive_weeks": 29,
+        "weeks": 52,
+        "worst_pct": -3.350000000000014
+      },
+      {
+        "candidate": "rsi15_exit90",
+        "period": "old_second",
+        "n": 220,
+        "mean_pct": -0.14953224281723618,
+        "win_pct": 54.090909090909086,
+        "pf": 0.8459236728341839,
+        "ci95_week_pct": [
+          -0.42170828137393856,
+          0.11583605407397034
+        ],
+        "positive_weeks": 18,
+        "weeks": 50,
+        "worst_pct": -3.350000000000003
+      },
+      {
+        "candidate": "rsi15_no_signal_exit",
+        "period": "old_first",
+        "n": 642,
+        "mean_pct": 0.237593530146544,
+        "win_pct": 57.476635514018696,
+        "pf": 1.200831058730242,
+        "ci95_week_pct": [
+          -0.1866786150565127,
+          0.5274946905574982
+        ],
+        "positive_weeks": 24,
+        "weeks": 52,
+        "worst_pct": -3.350000000000014
+      },
+      {
+        "candidate": "rsi15_no_signal_exit",
+        "period": "old_second",
+        "n": 211,
+        "mean_pct": -0.41783407348491824,
+        "win_pct": 40.758293838862556,
+        "pf": 0.6898219524739658,
+        "ci95_week_pct": [
+          -0.6613177084640262,
+          -0.19194313455103226
+        ],
+        "positive_weeks": 11,
+        "weeks": 50,
+        "worst_pct": -3.350000000000014
+      },
+      {
+        "candidate": "hourly_momentum",
+        "period": "old_first",
+        "n": 1211,
+        "mean_pct": -0.056243179701313206,
+        "win_pct": 26.011560693641616,
+        "pf": 0.9471091303053633,
+        "ci95_week_pct": [
+          -0.3291891832506776,
+          0.21411732666948463
+        ],
+        "positive_weeks": 18,
+        "weeks": 52,
+        "worst_pct": -5.7792217012038964
+      },
+      {
+        "candidate": "hourly_momentum",
+        "period": "old_second",
+        "n": 921,
+        "mean_pct": -0.19326654181685207,
+        "win_pct": 23.01845819761129,
+        "pf": 0.7858211500375823,
+        "ci95_week_pct": [
+          -0.4233780260545174,
+          0.07201971220861099
+        ],
+        "positive_weeks": 13,
+        "weeks": 51,
+        "worst_pct": -5.006626911725842
+      }
+    ]
+  },
+  "recent_screen": {
+    "cost_mode": "screen",
+    "hypotheses": [
+      {
+        "name": "breakout_base",
+        "family": "breakout",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "breakout_vol6",
+        "family": "breakout",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 6,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "breakout_vol10",
+        "family": "breakout",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 10,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "breakout_trail1.5",
+        "family": "breakout",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 1.5,
+        "btc_gate": false
+      },
+      {
+        "name": "breakout_btc_up",
+        "family": "breakout",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": true
+      },
+      {
+        "name": "breakout_15m",
+        "family": "breakout",
+        "minutes": 15,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 96,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi5_base",
+        "family": "rsi",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi5_entry5",
+        "family": "rsi",
+        "minutes": 5,
+        "level": 5,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi5_exit90",
+        "family": "rsi",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 90,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi5_gate80",
+        "family": "rsi",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.0048,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi15_base",
+        "family": "rsi",
+        "minutes": 15,
+        "level": 3,
+        "gate": 0.01,
+        "exit_level": 70,
+        "stop": 0.03,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi15_entry5",
+        "family": "rsi",
+        "minutes": 15,
+        "level": 5,
+        "gate": 0.01,
+        "exit_level": 70,
+        "stop": 0.03,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi15_exit90",
+        "family": "rsi",
+        "minutes": 15,
+        "level": 3,
+        "gate": 0.01,
+        "exit_level": 90,
+        "stop": 0.03,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi15_no_signal_exit",
+        "family": "rsi",
+        "minutes": 15,
+        "level": 3,
+        "gate": 0.01,
+        "exit_level": 101,
+        "stop": 0.03,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "hourly_momentum",
+        "family": "breakout",
+        "minutes": 60,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 24,
+        "volume": 2,
+        "trail": 3,
+        "btc_gate": true
+      }
+    ],
+    "markets": [
+      "ATOM",
+      "AVAX",
+      "BCH",
+      "BTC",
+      "DOGE",
+      "DOT",
+      "ENS",
+      "ETC",
+      "ETH",
+      "LINK",
+      "NEAR",
+      "ORCA",
+      "SOL",
+      "SUI",
+      "XRP"
+    ],
+    "results": [
+      {
+        "candidate": "breakout_base",
+        "period": "august",
+        "n": 250,
+        "mean_pct": 0.04351938528103938,
+        "win_pct": 31.6,
+        "pf": 1.0928294120751414,
+        "ci95_week_pct": [
+          -0.23152431727742315,
+          0.21387815037006777
+        ],
+        "positive_weeks": 1,
+        "weeks": 6,
+        "worst_pct": -2.1237945145156756
+      },
+      {
+        "candidate": "breakout_base",
+        "period": "september",
+        "n": 298,
+        "mean_pct": -0.020233621278972085,
+        "win_pct": 35.23489932885906,
+        "pf": 0.958608260015202,
+        "ci95_week_pct": [
+          -0.1119757609810682,
+          0.06187942221047507
+        ],
+        "positive_weeks": 1,
+        "weeks": 5,
+        "worst_pct": -1.6853795734691257
+      },
+      {
+        "candidate": "breakout_vol6",
+        "period": "august",
+        "n": 200,
+        "mean_pct": 0.02170202329908546,
+        "win_pct": 31.5,
+        "pf": 1.0469716601033956,
+        "ci95_week_pct": [
+          -0.22047881041656947,
+          0.12952184343988873
+        ],
+        "positive_weeks": 3,
+        "weeks": 6,
+        "worst_pct": -2.1237945145156756
+      },
+      {
+        "candidate": "breakout_vol6",
+        "period": "september",
+        "n": 247,
+        "mean_pct": -0.006284924497147293,
+        "win_pct": 36.032388663967616,
+        "pf": 0.9880872326806445,
+        "ci95_week_pct": [
+          -0.12655657511759832,
+          0.109227127170941
+        ],
+        "positive_weeks": 1,
+        "weeks": 5,
+        "worst_pct": -1.6853795734691257
+      },
+      {
+        "candidate": "breakout_vol10",
+        "period": "august",
+        "n": 107,
+        "mean_pct": 0.20684079733468766,
+        "win_pct": 41.1214953271028,
+        "pf": 1.4955637450696693,
+        "ci95_week_pct": [
+          -0.07078480885634146,
+          0.40155037119402476
+        ],
+        "positive_weeks": 3,
+        "weeks": 6,
+        "worst_pct": -2.1237945145156756
+      },
+      {
+        "candidate": "breakout_vol10",
+        "period": "september",
+        "n": 132,
+        "mean_pct": -0.18075188410742438,
+        "win_pct": 30.303030303030305,
+        "pf": 0.7037034892129415,
+        "ci95_week_pct": [
+          -0.29876984668087697,
+          -0.033390828765954034
+        ],
+        "positive_weeks": 1,
+        "weeks": 5,
+        "worst_pct": -1.6853795734691257
+      },
+      {
+        "candidate": "breakout_trail1.5",
+        "period": "august",
+        "n": 294,
+        "mean_pct": -0.07575690467937134,
+        "win_pct": 27.2108843537415,
+        "pf": 0.7941665923243254,
+        "ci95_week_pct": [
+          -0.21640078844003316,
+          -0.014787103875672924
+        ],
+        "positive_weeks": 1,
+        "weeks": 6,
+        "worst_pct": -2.1237945145156756
+      },
+      {
+        "candidate": "breakout_trail1.5",
+        "period": "september",
+        "n": 367,
+        "mean_pct": -0.06709810678964707,
+        "win_pct": 33.2425068119891,
+        "pf": 0.8350345409929824,
+        "ci95_week_pct": [
+          -0.15178170730359758,
+          0.006840555515275461
+        ],
+        "positive_weeks": 1,
+        "weeks": 5,
+        "worst_pct": -1.6853795734691257
+      },
+      {
+        "candidate": "breakout_btc_up",
+        "period": "august",
+        "n": 173,
+        "mean_pct": 0.10805550432195402,
+        "win_pct": 32.947976878612714,
+        "pf": 1.2064406371616627,
+        "ci95_week_pct": [
+          -0.549432273737816,
+          0.29722936328570526
+        ],
+        "positive_weeks": 1,
+        "weeks": 5,
+        "worst_pct": -2.1237945145156756
+      },
+      {
+        "candidate": "breakout_btc_up",
+        "period": "september",
+        "n": 233,
+        "mean_pct": 0.001966610309104273,
+        "win_pct": 36.48068669527897,
+        "pf": 1.0040460725659786,
+        "ci95_week_pct": [
+          -0.18019319464802858,
+          0.10303785179656443
+        ],
+        "positive_weeks": 2,
+        "weeks": 5,
+        "worst_pct": -1.6853795734691257
+      },
+      {
+        "candidate": "breakout_15m",
+        "period": "august",
+        "n": 127,
+        "mean_pct": 0.025809363999720104,
+        "win_pct": 30.708661417322837,
+        "pf": 1.0486995898640896,
+        "ci95_week_pct": [
+          -0.3800907192741918,
+          0.24181926912897642
+        ],
+        "positive_weeks": 2,
+        "weeks": 6,
+        "worst_pct": -2.5118711790899972
+      },
+      {
+        "candidate": "breakout_15m",
+        "period": "september",
+        "n": 158,
+        "mean_pct": 0.00887670309917847,
+        "win_pct": 31.645569620253166,
+        "pf": 1.0132806543222028,
+        "ci95_week_pct": [
+          -0.36642818545579176,
+          0.4027738840082915
+        ],
+        "positive_weeks": 2,
+        "weeks": 5,
+        "worst_pct": -2.017065823654274
+      },
+      {
+        "candidate": "rsi5_base",
+        "period": "august",
+        "n": 95,
+        "mean_pct": 0.17262677975992663,
+        "win_pct": 57.89473684210527,
+        "pf": 1.5420852858286387,
+        "ci95_week_pct": [
+          -0.0385433954257059,
+          0.2038409970301197
+        ],
+        "positive_weeks": 4,
+        "weeks": 5,
+        "worst_pct": -2.7000000000000024
+      },
+      {
+        "candidate": "rsi5_base",
+        "period": "september",
+        "n": 138,
+        "mean_pct": 0.06303728025705446,
+        "win_pct": 48.55072463768116,
+        "pf": 1.2009933867451037,
+        "ci95_week_pct": [
+          -0.022308859464735077,
+          0.20237486881480396
+        ],
+        "positive_weeks": 3,
+        "weeks": 5,
+        "worst_pct": -2.7000000000000135
+      },
+      {
+        "candidate": "rsi5_entry5",
+        "period": "august",
+        "n": 133,
+        "mean_pct": -0.003985242006791571,
+        "win_pct": 52.63157894736842,
+        "pf": 0.9904580329213483,
+        "ci95_week_pct": [
+          -0.31078326508924436,
+          0.04727861594466339
+        ],
+        "positive_weeks": 3,
+        "weeks": 5,
+        "worst_pct": -2.7000000000000135
+      },
+      {
+        "candidate": "rsi5_entry5",
+        "period": "september",
+        "n": 201,
+        "mean_pct": 0.06962317012697125,
+        "win_pct": 53.73134328358209,
+        "pf": 1.2206051723853704,
+        "ci95_week_pct": [
+          -0.007642388570502263,
+          0.18451011445207727
+        ],
+        "positive_weeks": 3,
+        "weeks": 5,
+        "worst_pct": -2.7000000000000024
+      },
+      {
+        "candidate": "rsi5_exit90",
+        "period": "august",
+        "n": 84,
+        "mean_pct": 0.06423847100673641,
+        "win_pct": 57.14285714285714,
+        "pf": 1.1147685451422835,
+        "ci95_week_pct": [
+          -0.8243015514385554,
+          0.18542391434664016
+        ],
+        "positive_weeks": 3,
+        "weeks": 5,
+        "worst_pct": -2.7000000000000135
+      },
+      {
+        "candidate": "rsi5_exit90",
+        "period": "september",
+        "n": 117,
+        "mean_pct": -0.043857665300115374,
+        "win_pct": 51.28205128205128,
+        "pf": 0.9202324349331986,
+        "ci95_week_pct": [
+          -0.263392519499185,
+          0.11194556092648095
+        ],
+        "positive_weeks": 2,
+        "weeks": 5,
+        "worst_pct": -2.7000000000000135
+      },
+      {
+        "candidate": "rsi5_gate80",
+        "period": "august",
+        "n": 124,
+        "mean_pct": 0.13164595829366157,
+        "win_pct": 59.67741935483871,
+        "pf": 1.4308917335891524,
+        "ci95_week_pct": [
+          -0.033222754967197655,
+          0.19559560702446685
+        ],
+        "positive_weeks": 4,
+        "weeks": 5,
+        "worst_pct": -2.7000000000000024
+      },
+      {
+        "candidate": "rsi5_gate80",
+        "period": "september",
+        "n": 191,
+        "mean_pct": 0.02558767929339866,
+        "win_pct": 48.167539267015705,
+        "pf": 1.0873438986658606,
+        "ci95_week_pct": [
+          -0.06897935088527073,
+          0.1162742107084704
+        ],
+        "positive_weeks": 3,
+        "weeks": 5,
+        "worst_pct": -2.7000000000000135
+      },
+      {
+        "candidate": "rsi15_base",
+        "period": "august",
+        "n": 41,
+        "mean_pct": 0.3384935445768756,
+        "win_pct": 70.73170731707317,
+        "pf": 1.8009729659888816,
+        "ci95_week_pct": [
+          -0.3102004008015977,
+          0.5185314604921453
+        ],
+        "positive_weeks": 2,
+        "weeks": 3,
+        "worst_pct": -3.350000000000014
+      },
+      {
+        "candidate": "rsi15_base",
+        "period": "september",
+        "n": 86,
+        "mean_pct": 0.028152849185459267,
+        "win_pct": 55.81395348837209,
+        "pf": 1.052900292061301,
+        "ci95_week_pct": [
+          -0.04336540932563176,
+          0.07302435474356195
+        ],
+        "positive_weeks": 3,
+        "weeks": 5,
+        "worst_pct": -3.350000000000003
+      },
+      {
+        "candidate": "rsi15_entry5",
+        "period": "august",
+        "n": 76,
+        "mean_pct": 0.4480087838305226,
+        "win_pct": 73.68421052631578,
+        "pf": 2.166302817301207,
+        "ci95_week_pct": [
+          -0.3102004008015977,
+          0.7013854039115422
+        ],
+        "positive_weeks": 2,
+        "weeks": 3,
+        "worst_pct": -3.350000000000003
+      },
+      {
+        "candidate": "rsi15_entry5",
+        "period": "september",
+        "n": 160,
+        "mean_pct": 0.1673567745580456,
+        "win_pct": 61.875,
+        "pf": 1.3506844949314394,
+        "ci95_week_pct": [
+          -0.006758847130954603,
+          0.3607688566778512
+        ],
+        "positive_weeks": 3,
+        "weeks": 5,
+        "worst_pct": -3.350000000000003
+      },
+      {
+        "candidate": "rsi15_exit90",
+        "period": "august",
+        "n": 39,
+        "mean_pct": 0.48029062062467826,
+        "win_pct": 71.7948717948718,
+        "pf": 1.8992272243358312,
+        "ci95_week_pct": [
+          -0.3102004008015977,
+          0.6760628951015124
+        ],
+        "positive_weeks": 2,
+        "weeks": 3,
+        "worst_pct": -3.350000000000014
+      },
+      {
+        "candidate": "rsi15_exit90",
+        "period": "september",
+        "n": 82,
+        "mean_pct": 0.12495681800672596,
+        "win_pct": 54.87804878048781,
+        "pf": 1.1958067026706254,
+        "ci95_week_pct": [
+          0.011034818979135752,
+          0.24705019719326082
+        ],
+        "positive_weeks": 4,
+        "weeks": 5,
+        "worst_pct": -3.350000000000003
+      },
+      {
+        "candidate": "rsi15_no_signal_exit",
+        "period": "august",
+        "n": 38,
+        "mean_pct": 0.9138454730340713,
+        "win_pct": 71.05263157894737,
+        "pf": 2.2472712370628356,
+        "ci95_week_pct": [
+          -2.0136072144288595,
+          1.4797259553114714
+        ],
+        "positive_weeks": 2,
+        "weeks": 3,
+        "worst_pct": -3.350000000000014
+      },
+      {
+        "candidate": "rsi15_no_signal_exit",
+        "period": "september",
+        "n": 79,
+        "mean_pct": -0.08728367367067677,
+        "win_pct": 49.36708860759494,
+        "pf": 0.9212589787010006,
+        "ci95_week_pct": [
+          -0.1807175739115998,
+          0.00942093800013872
+        ],
+        "positive_weeks": 1,
+        "weeks": 5,
+        "worst_pct": -3.350000000000014
+      },
+      {
+        "candidate": "hourly_momentum",
+        "period": "august",
+        "n": 90,
+        "mean_pct": 0.915988697387384,
+        "win_pct": 40.0,
+        "pf": 2.252223771257846,
+        "ci95_week_pct": [
+          -1.2000000000000008,
+          1.7182248924733794
+        ],
+        "positive_weeks": 1,
+        "weeks": 5,
+        "worst_pct": -2.4859917388929786
+      },
+      {
+        "candidate": "hourly_momentum",
+        "period": "september",
+        "n": 137,
+        "mean_pct": 0.3020412230676598,
+        "win_pct": 29.1970802919708,
+        "pf": 1.2955744230083928,
+        "ci95_week_pct": [
+          -0.8764801455727367,
+          2.090891267956679
+        ],
+        "positive_weeks": 1,
+        "weeks": 5,
+        "worst_pct": -3.5645315445142156
+      }
+    ]
+  },
+  "old_entry": {
+    "cost_mode": "entry",
+    "hypotheses": [
+      {
+        "name": "breakout_base",
+        "family": "breakout",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "breakout_vol6",
+        "family": "breakout",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 6,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "breakout_vol10",
+        "family": "breakout",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 10,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "breakout_trail1.5",
+        "family": "breakout",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 1.5,
+        "btc_gate": false
+      },
+      {
+        "name": "breakout_btc_up",
+        "family": "breakout",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": true
+      },
+      {
+        "name": "breakout_15m",
+        "family": "breakout",
+        "minutes": 15,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 96,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi5_base",
+        "family": "rsi",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi5_entry5",
+        "family": "rsi",
+        "minutes": 5,
+        "level": 5,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi5_exit90",
+        "family": "rsi",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 90,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi5_gate80",
+        "family": "rsi",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.0048,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi15_base",
+        "family": "rsi",
+        "minutes": 15,
+        "level": 3,
+        "gate": 0.01,
+        "exit_level": 70,
+        "stop": 0.03,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi15_entry5",
+        "family": "rsi",
+        "minutes": 15,
+        "level": 5,
+        "gate": 0.01,
+        "exit_level": 70,
+        "stop": 0.03,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi15_exit90",
+        "family": "rsi",
+        "minutes": 15,
+        "level": 3,
+        "gate": 0.01,
+        "exit_level": 90,
+        "stop": 0.03,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi15_no_signal_exit",
+        "family": "rsi",
+        "minutes": 15,
+        "level": 3,
+        "gate": 0.01,
+        "exit_level": 101,
+        "stop": 0.03,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "hourly_momentum",
+        "family": "breakout",
+        "minutes": 60,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 24,
+        "volume": 2,
+        "trail": 3,
+        "btc_gate": true
+      }
+    ],
+    "markets": [
+      "ATOM",
+      "AVAX",
+      "BCH",
+      "BTC",
+      "DOGE",
+      "DOT",
+      "ENS",
+      "ETC",
+      "ETH",
+      "LINK",
+      "NEAR",
+      "ORCA",
+      "SOL",
+      "SUI",
+      "XRP"
+    ],
+    "results": [
+      {
+        "candidate": "breakout_base",
+        "period": "old_first",
+        "n": 2729,
+        "mean_pct": -0.3485832898047477,
+        "win_pct": 22.352510076951265,
+        "pf": 0.4661609024875026,
+        "ci95_week_pct": [
+          -0.4377835858798749,
+          -0.24510605414158382
+        ],
+        "positive_weeks": 3,
+        "weeks": 52,
+        "worst_pct": -3.5470957442210906
+      },
+      {
+        "candidate": "breakout_base",
+        "period": "old_second",
+        "n": 2499,
+        "mean_pct": -0.31182940528959247,
+        "win_pct": 21.208483393357344,
+        "pf": 0.4870097196317129,
+        "ci95_week_pct": [
+          -0.38611116769761783,
+          -0.22979306760592338
+        ],
+        "positive_weeks": 5,
+        "weeks": 52,
+        "worst_pct": -4.2608130073540975
+      },
+      {
+        "candidate": "breakout_vol6",
+        "period": "old_first",
+        "n": 2194,
+        "mean_pct": -0.3315182745927479,
+        "win_pct": 23.655423883318143,
+        "pf": 0.49372943160456617,
+        "ci95_week_pct": [
+          -0.4292511043417082,
+          -0.213830033296409
+        ],
+        "positive_weeks": 3,
+        "weeks": 52,
+        "worst_pct": -3.5470957442210906
+      },
+      {
+        "candidate": "breakout_vol6",
+        "period": "old_second",
+        "n": 2080,
+        "mean_pct": -0.3206518632802411,
+        "win_pct": 21.153846153846153,
+        "pf": 0.4865922204492318,
+        "ci95_week_pct": [
+          -0.39455185053333086,
+          -0.24296063379824662
+        ],
+        "positive_weeks": 6,
+        "weeks": 52,
+        "worst_pct": -4.2608130073540975
+      },
+      {
+        "candidate": "breakout_vol10",
+        "period": "old_first",
+        "n": 1029,
+        "mean_pct": -0.3415453899104865,
+        "win_pct": 24.586977648202136,
+        "pf": 0.5241677750059544,
+        "ci95_week_pct": [
+          -0.48502947958863496,
+          -0.17064237773564148
+        ],
+        "positive_weeks": 6,
+        "weeks": 52,
+        "worst_pct": -3.2610148530146263
+      },
+      {
+        "candidate": "breakout_vol10",
+        "period": "old_second",
+        "n": 1029,
+        "mean_pct": -0.2746172593874107,
+        "win_pct": 22.351797862001945,
+        "pf": 0.5845571997978207,
+        "ci95_week_pct": [
+          -0.3897199133396877,
+          -0.1440755818114633
+        ],
+        "positive_weeks": 11,
+        "weeks": 52,
+        "worst_pct": -4.2608130073540975
+      },
+      {
+        "candidate": "breakout_trail1.5",
+        "period": "old_first",
+        "n": 3231,
+        "mean_pct": -0.3341084430561913,
+        "win_pct": 21.634168987929435,
+        "pf": 0.38026726729833915,
+        "ci95_week_pct": [
+          -0.3848092380911174,
+          -0.27568182875490177
+        ],
+        "positive_weeks": 2,
+        "weeks": 52,
+        "worst_pct": -3.648714184653773
+      },
+      {
+        "candidate": "breakout_trail1.5",
+        "period": "old_second",
+        "n": 2929,
+        "mean_pct": -0.3252859636481849,
+        "win_pct": 19.9044042335268,
+        "pf": 0.35775896345996183,
+        "ci95_week_pct": [
+          -0.3729256333782648,
+          -0.2706542132029637
+        ],
+        "positive_weeks": 4,
+        "weeks": 52,
+        "worst_pct": -4.2608130073540975
+      },
+      {
+        "candidate": "breakout_btc_up",
+        "period": "old_first",
+        "n": 2181,
+        "mean_pct": -0.35400008339695127,
+        "win_pct": 22.420907840440165,
+        "pf": 0.4594190894977364,
+        "ci95_week_pct": [
+          -0.43758192137320673,
+          -0.2678852726693329
+        ],
+        "positive_weeks": 4,
+        "weeks": 52,
+        "worst_pct": -3.2610148530146263
+      },
+      {
+        "candidate": "breakout_btc_up",
+        "period": "old_second",
+        "n": 1628,
+        "mean_pct": -0.3666326840002226,
+        "win_pct": 19.717444717444717,
+        "pf": 0.3889003704633723,
+        "ci95_week_pct": [
+          -0.4420231214304108,
+          -0.2864333284403266
+        ],
+        "positive_weeks": 8,
+        "weeks": 52,
+        "worst_pct": -3.8483860828161855
+      },
+      {
+        "candidate": "breakout_15m",
+        "period": "old_first",
+        "n": 1328,
+        "mean_pct": -0.43738852814322116,
+        "win_pct": 19.27710843373494,
+        "pf": 0.45548222521395115,
+        "ci95_week_pct": [
+          -0.5614713501149915,
+          -0.31314159452430645
+        ],
+        "positive_weeks": 6,
+        "weeks": 52,
+        "worst_pct": -3.7759492036814226
+      },
+      {
+        "candidate": "breakout_15m",
+        "period": "old_second",
+        "n": 1267,
+        "mean_pct": -0.364275536773463,
+        "win_pct": 16.890292028413576,
+        "pf": 0.5045559260261551,
+        "ci95_week_pct": [
+          -0.469407403322945,
+          -0.24536862430866369
+        ],
+        "positive_weeks": 13,
+        "weeks": 52,
+        "worst_pct": -5.0840109455397355
+      },
+      {
+        "candidate": "rsi5_base",
+        "period": "old_first",
+        "n": 875,
+        "mean_pct": 0.09676058688114508,
+        "win_pct": 66.28571428571428,
+        "pf": 1.2160538990730736,
+        "ci95_week_pct": [
+          -0.017256280921085637,
+          0.19737605269949626
+        ],
+        "positive_weeks": 29,
+        "weeks": 53,
+        "worst_pct": -2.7100000000000133
+      },
+      {
+        "candidate": "rsi5_base",
+        "period": "old_second",
+        "n": 644,
+        "mean_pct": 0.09844621878217351,
+        "win_pct": 57.7639751552795,
+        "pf": 1.292373205695145,
+        "ci95_week_pct": [
+          0.02452627002476957,
+          0.16165541199854935
+        ],
+        "positive_weeks": 29,
+        "weeks": 51,
+        "worst_pct": -2.710000000000002
+      },
+      {
+        "candidate": "rsi5_entry5",
+        "period": "old_first",
+        "n": 1350,
+        "mean_pct": 0.01950118654566898,
+        "win_pct": 64.07407407407408,
+        "pf": 1.0415489956116557,
+        "ci95_week_pct": [
+          -0.07574594323611245,
+          0.10048959082608162
+        ],
+        "positive_weeks": 22,
+        "weeks": 53,
+        "worst_pct": -2.7100000000000133
+      },
+      {
+        "candidate": "rsi5_entry5",
+        "period": "old_second",
+        "n": 972,
+        "mean_pct": 0.07238533994851834,
+        "win_pct": 56.06995884773662,
+        "pf": 1.197810041268161,
+        "ci95_week_pct": [
+          0.010517379422312425,
+          0.1305407442383335
+        ],
+        "positive_weeks": 32,
+        "weeks": 51,
+        "worst_pct": -2.710000000000002
+      },
+      {
+        "candidate": "rsi5_exit90",
+        "period": "old_first",
+        "n": 835,
+        "mean_pct": 0.1458034023430499,
+        "win_pct": 65.26946107784431,
+        "pf": 1.2174582571323929,
+        "ci95_week_pct": [
+          0.0004921062419076913,
+          0.24841893937681556
+        ],
+        "positive_weeks": 21,
+        "weeks": 53,
+        "worst_pct": -2.7100000000000133
+      },
+      {
+        "candidate": "rsi5_exit90",
+        "period": "old_second",
+        "n": 577,
+        "mean_pct": 0.06461968121099532,
+        "win_pct": 57.019064124783355,
+        "pf": 1.1256156896091998,
+        "ci95_week_pct": [
+          -0.045009220981059396,
+          0.1546403736427916
+        ],
+        "positive_weeks": 23,
+        "weeks": 51,
+        "worst_pct": -2.7100000000000133
+      },
+      {
+        "candidate": "rsi5_gate80",
+        "period": "old_first",
+        "n": 1486,
+        "mean_pct": 0.023033418161626223,
+        "win_pct": 63.795423956931366,
+        "pf": 1.0576073401016561,
+        "ci95_week_pct": [
+          -0.060783612390571146,
+          0.09611043518699477
+        ],
+        "positive_weeks": 22,
+        "weeks": 53,
+        "worst_pct": -2.7100000000000133
+      },
+      {
+        "candidate": "rsi5_gate80",
+        "period": "old_second",
+        "n": 979,
+        "mean_pct": 0.018561329122739355,
+        "win_pct": 55.362614913176714,
+        "pf": 1.0565671175987918,
+        "ci95_week_pct": [
+          -0.0457610439902126,
+          0.07765924314572303
+        ],
+        "positive_weeks": 30,
+        "weeks": 51,
+        "worst_pct": -2.710000000000002
+      },
+      {
+        "candidate": "rsi15_base",
+        "period": "old_first",
+        "n": 670,
+        "mean_pct": 0.22044370213368947,
+        "win_pct": 67.91044776119402,
+        "pf": 1.3451929491133938,
+        "ci95_week_pct": [
+          0.06536020138586254,
+          0.3658663673889075
+        ],
+        "positive_weeks": 28,
+        "weeks": 52,
+        "worst_pct": -3.350000000000014
+      },
+      {
+        "candidate": "rsi15_base",
+        "period": "old_second",
+        "n": 228,
+        "mean_pct": -0.19303158265048184,
+        "win_pct": 51.75438596491229,
+        "pf": 0.7504903049895142,
+        "ci95_week_pct": [
+          -0.3557611114122362,
+          -0.034471259315232934
+        ],
+        "positive_weeks": 16,
+        "weeks": 50,
+        "worst_pct": -3.350000000000014
+      },
+      {
+        "candidate": "rsi15_entry5",
+        "period": "old_first",
+        "n": 1074,
+        "mean_pct": 0.0388383282337705,
+        "win_pct": 63.78026070763501,
+        "pf": 1.0549835910183567,
+        "ci95_week_pct": [
+          -0.08105587924341041,
+          0.14476724570470842
+        ],
+        "positive_weeks": 26,
+        "weeks": 52,
+        "worst_pct": -3.350000000000014
+      },
+      {
+        "candidate": "rsi15_entry5",
+        "period": "old_second",
+        "n": 356,
+        "mean_pct": -0.1906390724636615,
+        "win_pct": 54.7752808988764,
+        "pf": 0.7537081332740783,
+        "ci95_week_pct": [
+          -0.3697503789174349,
+          -0.031826127841627375
+        ],
+        "positive_weeks": 16,
+        "weeks": 50,
+        "worst_pct": -3.350000000000014
+      },
+      {
+        "candidate": "rsi15_exit90",
+        "period": "old_first",
+        "n": 658,
+        "mean_pct": 0.20667979714958165,
+        "win_pct": 64.74164133738601,
+        "pf": 1.2145665229293883,
+        "ci95_week_pct": [
+          -0.0930385732060326,
+          0.44594471230524024
+        ],
+        "positive_weeks": 28,
+        "weeks": 52,
+        "worst_pct": -3.350000000000014
+      },
+      {
+        "candidate": "rsi15_exit90",
+        "period": "old_second",
+        "n": 220,
+        "mean_pct": -0.2736686064535998,
+        "win_pct": 53.18181818181819,
+        "pf": 0.7336321953759062,
+        "ci95_week_pct": [
+          -0.5459136102042522,
+          -0.007467904750960844
+        ],
+        "positive_weeks": 15,
+        "weeks": 50,
+        "worst_pct": -3.350000000000014
+      },
+      {
+        "candidate": "rsi15_no_signal_exit",
+        "period": "old_first",
+        "n": 642,
+        "mean_pct": 0.15581782921196458,
+        "win_pct": 57.3208722741433,
+        "pf": 1.127866276846659,
+        "ci95_week_pct": [
+          -0.2717958112236484,
+          0.44549310261424657
+        ],
+        "positive_weeks": 22,
+        "weeks": 52,
+        "worst_pct": -3.350000000000014
+      },
+      {
+        "candidate": "rsi15_no_signal_exit",
+        "period": "old_second",
+        "n": 211,
+        "mean_pct": -0.5425734099778093,
+        "win_pct": 40.28436018957346,
+        "pf": 0.6179469121091311,
+        "ci95_week_pct": [
+          -0.7793689862700578,
+          -0.31849872968784726
+        ],
+        "positive_weeks": 10,
+        "weeks": 50,
+        "worst_pct": -3.350000000000014
+      },
+      {
+        "candidate": "hourly_momentum",
+        "period": "old_first",
+        "n": 1211,
+        "mean_pct": -0.2062431797013132,
+        "win_pct": 23.20396366639141,
+        "pf": 0.8247192814128953,
+        "ci95_week_pct": [
+          -0.47918918325067766,
+          0.06411732666948483
+        ],
+        "positive_weeks": 14,
+        "weeks": 52,
+        "worst_pct": -5.929221701203896
+      },
+      {
+        "candidate": "hourly_momentum",
+        "period": "old_second",
+        "n": 921,
+        "mean_pct": -0.3432665418168521,
+        "win_pct": 20.412595005428884,
+        "pf": 0.6635716579371813,
+        "ci95_week_pct": [
+          -0.5733780260545176,
+          -0.07798028779138871
+        ],
+        "positive_weeks": 10,
+        "weeks": 51,
+        "worst_pct": -5.1566269117258425
+      }
+    ]
+  },
+  "recent_entry": {
+    "cost_mode": "entry",
+    "hypotheses": [
+      {
+        "name": "breakout_base",
+        "family": "breakout",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "breakout_vol6",
+        "family": "breakout",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 6,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "breakout_vol10",
+        "family": "breakout",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 10,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "breakout_trail1.5",
+        "family": "breakout",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 1.5,
+        "btc_gate": false
+      },
+      {
+        "name": "breakout_btc_up",
+        "family": "breakout",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": true
+      },
+      {
+        "name": "breakout_15m",
+        "family": "breakout",
+        "minutes": 15,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 96,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi5_base",
+        "family": "rsi",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi5_entry5",
+        "family": "rsi",
+        "minutes": 5,
+        "level": 5,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi5_exit90",
+        "family": "rsi",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 90,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi5_gate80",
+        "family": "rsi",
+        "minutes": 5,
+        "level": 3,
+        "gate": 0.0048,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi15_base",
+        "family": "rsi",
+        "minutes": 15,
+        "level": 3,
+        "gate": 0.01,
+        "exit_level": 70,
+        "stop": 0.03,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi15_entry5",
+        "family": "rsi",
+        "minutes": 15,
+        "level": 5,
+        "gate": 0.01,
+        "exit_level": 70,
+        "stop": 0.03,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi15_exit90",
+        "family": "rsi",
+        "minutes": 15,
+        "level": 3,
+        "gate": 0.01,
+        "exit_level": 90,
+        "stop": 0.03,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "rsi15_no_signal_exit",
+        "family": "rsi",
+        "minutes": 15,
+        "level": 3,
+        "gate": 0.01,
+        "exit_level": 101,
+        "stop": 0.03,
+        "lookback": 288,
+        "volume": 5,
+        "trail": 3,
+        "btc_gate": false
+      },
+      {
+        "name": "hourly_momentum",
+        "family": "breakout",
+        "minutes": 60,
+        "level": 3,
+        "gate": 0.006,
+        "exit_level": 70,
+        "stop": 0.025,
+        "lookback": 24,
+        "volume": 2,
+        "trail": 3,
+        "btc_gate": true
+      }
+    ],
+    "markets": [
+      "ATOM",
+      "AVAX",
+      "BCH",
+      "BTC",
+      "DOGE",
+      "DOT",
+      "ENS",
+      "ETC",
+      "ETH",
+      "LINK",
+      "NEAR",
+      "ORCA",
+      "SOL",
+      "SUI",
+      "XRP"
+    ],
+    "results": [
+      {
+        "candidate": "breakout_base",
+        "period": "august",
+        "n": 250,
+        "mean_pct": -0.1064806147189606,
+        "win_pct": 25.6,
+        "pf": 0.8152122430452591,
+        "ci95_week_pct": [
+          -0.38152431727742325,
+          0.06387815037006775
+        ],
+        "positive_weeks": 1,
+        "weeks": 6,
+        "worst_pct": -2.2737945145156755
+      },
+      {
+        "candidate": "breakout_base",
+        "period": "september",
+        "n": 298,
+        "mean_pct": -0.17023362127897207,
+        "win_pct": 29.86577181208054,
+        "pf": 0.7120420627964573,
+        "ci95_week_pct": [
+          -0.2619757609810683,
+          -0.08812057778952494
+        ],
+        "positive_weeks": 0,
+        "weeks": 5,
+        "worst_pct": -1.8353795734691254
+      },
+      {
+        "candidate": "breakout_vol6",
+        "period": "august",
+        "n": 200,
+        "mean_pct": -0.1282979767009145,
+        "win_pct": 26.0,
+        "pf": 0.7745579913502666,
+        "ci95_week_pct": [
+          -0.37047881041656955,
+          -0.020478156560111274
+        ],
+        "positive_weeks": 1,
+        "weeks": 6,
+        "worst_pct": -2.2737945145156755
+      },
+      {
+        "candidate": "breakout_vol6",
+        "period": "september",
+        "n": 247,
+        "mean_pct": -0.1562849244971473,
+        "win_pct": 32.79352226720648,
+        "pf": 0.7506790727133926,
+        "ci95_week_pct": [
+          -0.2765565751175983,
+          -0.04077287282905898
+        ],
+        "positive_weeks": 1,
+        "weeks": 5,
+        "worst_pct": -1.8353795734691254
+      },
+      {
+        "candidate": "breakout_vol10",
+        "period": "august",
+        "n": 107,
+        "mean_pct": 0.05684079733468774,
+        "win_pct": 33.64485981308411,
+        "pf": 1.1108915927701621,
+        "ci95_week_pct": [
+          -0.2207848088563414,
+          0.2515503711940249
+        ],
+        "positive_weeks": 3,
+        "weeks": 6,
+        "worst_pct": -2.2737945145156755
+      },
+      {
+        "candidate": "breakout_vol10",
+        "period": "september",
+        "n": 132,
+        "mean_pct": -0.33075188410742434,
+        "win_pct": 27.27272727272727,
+        "pf": 0.5386221125865512,
+        "ci95_week_pct": [
+          -0.44876984668087705,
+          -0.18339082876595397
+        ],
+        "positive_weeks": 0,
+        "weeks": 5,
+        "worst_pct": -1.8353795734691254
+      },
+      {
+        "candidate": "breakout_trail1.5",
+        "period": "august",
+        "n": 294,
+        "mean_pct": -0.22575690467937132,
+        "win_pct": 25.170068027210885,
+        "pf": 0.5285574675957722,
+        "ci95_week_pct": [
+          -0.36640078844003326,
+          -0.16478710387567305
+        ],
+        "positive_weeks": 0,
+        "weeks": 6,
+        "worst_pct": -2.2737945145156755
+      },
+      {
+        "candidate": "breakout_trail1.5",
+        "period": "september",
+        "n": 367,
+        "mean_pct": -0.217098106789647,
+        "win_pct": 28.882833787465938,
+        "pf": 0.5742779816462398,
+        "ci95_week_pct": [
+          -0.30178170730359766,
+          -0.14315944448472467
+        ],
+        "positive_weeks": 0,
+        "weeks": 5,
+        "worst_pct": -1.8353795734691254
+      },
+      {
+        "candidate": "breakout_btc_up",
+        "period": "august",
+        "n": 173,
+        "mean_pct": -0.04194449567804593,
+        "win_pct": 27.167630057803464,
+        "pf": 0.9332388975431892,
+        "ci95_week_pct": [
+          -0.6994322737378159,
+          0.14722936328570518
+        ],
+        "positive_weeks": 1,
+        "weeks": 5,
+        "worst_pct": -2.2737945145156755
+      },
+      {
+        "candidate": "breakout_btc_up",
+        "period": "september",
+        "n": 233,
+        "mean_pct": -0.14803338969089566,
+        "win_pct": 31.759656652360512,
+        "pf": 0.7472185342850889,
+        "ci95_week_pct": [
+          -0.3301931946480286,
+          -0.046962148203435534
+        ],
+        "positive_weeks": 0,
+        "weeks": 5,
+        "worst_pct": -1.8353795734691254
+      },
+      {
+        "candidate": "breakout_15m",
+        "period": "august",
+        "n": 127,
+        "mean_pct": -0.12419063600027985,
+        "win_pct": 24.409448818897637,
+        "pf": 0.8059079449439487,
+        "ci95_week_pct": [
+          -0.5300907192741918,
+          0.09181926912897641
+        ],
+        "positive_weeks": 2,
+        "weeks": 6,
+        "worst_pct": -2.661871179089997
+      },
+      {
+        "candidate": "breakout_15m",
+        "period": "september",
+        "n": 158,
+        "mean_pct": -0.1411232969008215,
+        "win_pct": 27.848101265822784,
+        "pf": 0.817662997017696,
+        "ci95_week_pct": [
+          -0.5164281854557919,
+          0.2527738840082914
+        ],
+        "positive_weeks": 1,
+        "weeks": 5,
+        "worst_pct": -2.1670658236542737
+      },
+      {
+        "candidate": "rsi5_base",
+        "period": "august",
+        "n": 95,
+        "mean_pct": 0.16620572712834777,
+        "win_pct": 56.84210526315789,
+        "pf": 1.5174812769405592,
+        "ci95_week_pct": [
+          -0.04425768113999165,
+          0.19884099703011965
+        ],
+        "positive_weeks": 4,
+        "weeks": 5,
+        "worst_pct": -2.7000000000000024
+      },
+      {
+        "candidate": "rsi5_base",
+        "period": "september",
+        "n": 138,
+        "mean_pct": 0.056805396199083445,
+        "win_pct": 48.55072463768116,
+        "pf": 1.1790545968255624,
+        "ci95_week_pct": [
+          -0.029372351528227147,
+          0.19537486881480404
+        ],
+        "positive_weeks": 3,
+        "weeks": 5,
+        "worst_pct": -2.7100000000000133
+      },
+      {
+        "candidate": "rsi5_entry5",
+        "period": "august",
+        "n": 133,
+        "mean_pct": -0.010000279600776527,
+        "win_pct": 51.8796992481203,
+        "pf": 0.9762313393192883,
+        "ci95_week_pct": [
+          -0.3172832650892443,
+          0.04104673188669242
+        ],
+        "positive_weeks": 3,
+        "weeks": 5,
+        "worst_pct": -2.710000000000002
+      },
+      {
+        "candidate": "rsi5_entry5",
+        "period": "september",
+        "n": 201,
+        "mean_pct": 0.06345401589811552,
+        "win_pct": 53.73134328358209,
+        "pf": 1.1990185777903812,
+        "ci95_week_pct": [
+          -0.013529485344695794,
+          0.17789357309869383
+        ],
+        "positive_weeks": 3,
+        "weeks": 5,
+        "worst_pct": -2.710000000000002
+      },
+      {
+        "candidate": "rsi5_exit90",
+        "period": "august",
+        "n": 84,
+        "mean_pct": 0.057928947197212595,
+        "win_pct": 55.952380952380956,
+        "pf": 1.1030802595736209,
+        "ci95_week_pct": [
+          -0.830968218105222,
+          0.18058180908348231
+        ],
+        "positive_weeks": 3,
+        "weeks": 5,
+        "worst_pct": -2.710000000000002
+      },
+      {
+        "candidate": "rsi5_exit90",
+        "period": "september",
+        "n": 117,
+        "mean_pct": -0.04992604136849142,
+        "win_pct": 51.28205128205128,
+        "pf": 0.9097146718996206,
+        "ci95_week_pct": [
+          -0.26896944257610805,
+          0.10600111648203656
+        ],
+        "positive_weeks": 2,
+        "weeks": 5,
+        "worst_pct": -2.7100000000000133
+      },
+      {
+        "candidate": "rsi5_gate80",
+        "period": "august",
+        "n": 124,
+        "mean_pct": 0.1265653131323713,
+        "win_pct": 58.87096774193549,
+        "pf": 1.4113350163192466,
+        "ci95_week_pct": [
+          -0.0375705810541542,
+          0.19165400118505077
+        ],
+        "positive_weeks": 4,
+        "weeks": 5,
+        "worst_pct": -2.7000000000000024
+      },
+      {
+        "candidate": "rsi5_gate80",
+        "period": "september",
+        "n": 191,
+        "mean_pct": 0.021085061492351516,
+        "win_pct": 48.167539267015705,
+        "pf": 1.071336692694324,
+        "ci95_week_pct": [
+          -0.0733271769722272,
+          0.11118330161756143
+        ],
+        "positive_weeks": 3,
+        "weeks": 5,
+        "worst_pct": -2.7100000000000133
+      },
+      {
+        "candidate": "rsi15_base",
+        "period": "august",
+        "n": 41,
+        "mean_pct": 0.23288378847931457,
+        "win_pct": 70.73170731707317,
+        "pf": 1.5128849053725344,
+        "ci95_week_pct": [
+          -0.45020040080159773,
+          0.3924203493810342
+        ],
+        "positive_weeks": 2,
+        "weeks": 3,
+        "worst_pct": -3.350000000000014
+      },
+      {
+        "candidate": "rsi15_base",
+        "period": "september",
+        "n": 86,
+        "mean_pct": -0.07684715081454074,
+        "win_pct": 55.81395348837209,
+        "pf": 0.8673668664090537,
+        "ci95_week_pct": [
+          -0.15772024803530912,
+          -0.03126413238101668
+        ],
+        "positive_weeks": 0,
+        "weeks": 5,
+        "worst_pct": -3.350000000000003
+      },
+      {
+        "candidate": "rsi15_entry5",
+        "period": "august",
+        "n": 76,
+        "mean_pct": 0.3412982575147332,
+        "win_pct": 71.05263157894737,
+        "pf": 1.8292829771147967,
+        "ci95_week_pct": [
+          -0.45020040080159773,
+          0.5757854039115416
+        ],
+        "positive_weeks": 2,
+        "weeks": 3,
+        "worst_pct": -3.350000000000003
+      },
+      {
+        "candidate": "rsi15_entry5",
+        "period": "september",
+        "n": 160,
+        "mean_pct": 0.057481774558045595,
+        "win_pct": 61.25000000000001,
+        "pf": 1.1113311570346278,
+        "ci95_week_pct": [
+          -0.12113793209827486,
+          0.2504426382783545
+        ],
+        "positive_weeks": 3,
+        "weeks": 5,
+        "worst_pct": -3.350000000000003
+      },
+      {
+        "candidate": "rsi15_exit90",
+        "period": "august",
+        "n": 39,
+        "mean_pct": 0.3764444667785243,
+        "win_pct": 69.23076923076923,
+        "pf": 1.668647393039294,
+        "ci95_week_pct": [
+          -0.45020040080159773,
+          0.588790167828785
+        ],
+        "positive_weeks": 2,
+        "weeks": 3,
+        "worst_pct": -3.350000000000014
+      },
+      {
+        "candidate": "rsi15_exit90",
+        "period": "september",
+        "n": 82,
+        "mean_pct": 0.02166413507989665,
+        "win_pct": 54.87804878048781,
+        "pf": 1.031576184105701,
+        "ci95_week_pct": [
+          -0.09922492128060446,
+          0.1550231701662338
+        ],
+        "positive_weeks": 2,
+        "weeks": 5,
+        "worst_pct": -3.350000000000014
+      },
+      {
+        "candidate": "rsi15_no_signal_exit",
+        "period": "august",
+        "n": 38,
+        "mean_pct": 0.8109507361919659,
+        "win_pct": 68.42105263157895,
+        "pf": 2.0576610039236343,
+        "ci95_week_pct": [
+          -2.1536072144288596,
+          1.3924532280387445
+        ],
+        "positive_weeks": 2,
+        "weeks": 3,
+        "worst_pct": -3.350000000000014
+      },
+      {
+        "candidate": "rsi15_no_signal_exit",
+        "period": "september",
+        "n": 79,
+        "mean_pct": -0.1889292432909299,
+        "win_pct": 49.36708860759494,
+        "pf": 0.8379447467477179,
+        "ci95_week_pct": [
+          -0.30400328819731404,
+          -0.08470390606286007
+        ],
+        "positive_weeks": 0,
+        "weeks": 5,
+        "worst_pct": -3.350000000000014
+      },
+      {
+        "candidate": "hourly_momentum",
+        "period": "august",
+        "n": 90,
+        "mean_pct": 0.7659886973873842,
+        "win_pct": 40.0,
+        "pf": 1.9324386744261453,
+        "ci95_week_pct": [
+          -1.3500000000000008,
+          1.5682248924733804
+        ],
+        "positive_weeks": 1,
+        "weeks": 5,
+        "worst_pct": -2.6359917388929786
+      },
+      {
+        "candidate": "hourly_momentum",
+        "period": "september",
+        "n": 137,
+        "mean_pct": 0.15204122306765985,
+        "win_pct": 28.467153284671532,
+        "pf": 1.1346804711952376,
+        "ci95_week_pct": [
+          -1.0264801455727366,
+          1.9408912679566803
+        ],
+        "positive_weeks": 1,
+        "weeks": 5,
+        "worst_pct": -3.714531544514216
+      }
+    ]
+  },
+  "recent_input_sha256": {
+    "KRW-ATOM_minute5.csv": "868b77894ab6f26ec548a743a5ce9eed1ee0e871f859f09b17eccb9c37fec74f",
+    "KRW-AVAX_minute5.csv": "0fbc3b0b00f0f5484910f47cc2f1c406ec58d35fca612794046b73e0ac7555a6",
+    "KRW-BCH_minute5.csv": "cc01fa16e9d832d237e4de02b78fadd7499a610cc34fed8f462b5eb261835293",
+    "KRW-BTC_minute5.csv": "71f9c7ca6e382eebf5d574378edec1263a8977eae9202b78509513606bc0a6fa",
+    "KRW-DOGE_minute5.csv": "45f311c793c847b331fc85052154f35aa190715b9ad6a82d3e6fdf803b63b748",
+    "KRW-DOT_minute5.csv": "70aa61502aa5daa5a337d742b89a165e93d003967ba5aacd09295f3c5c0c04d9",
+    "KRW-ENS_minute5.csv": "28a2cdb7a2e282a0478931d363b1f42b272dd62c38e0fc4c3e7cb2087d97e998",
+    "KRW-ETC_minute5.csv": "77575ddc51636c06acf0b228906c268764e22bd2a925e334a5ebfb413a27b8b0",
+    "KRW-ETH_minute5.csv": "b410d3c9e203422e0a25674a2390637f8d11519a64212354448280fddc761a2e",
+    "KRW-LINK_minute5.csv": "aac90c30ef25a9b0e26055a00e14869733b21042813d7195666e9c90b62b2b0e",
+    "KRW-NEAR_minute5.csv": "7af085a90ce6cba631cdebe8c57db6a2b09bcf6387542125d1b5f8de2aeac7e4",
+    "KRW-ORCA_minute5.csv": "de6dac159bf029dd715a876ab96e64148b488f1a27398e456af34a82ed383675",
+    "KRW-SOL_minute5.csv": "7aeeefd205645e3245f8cf67a08f2000b48056af1c53352d221a5953d8806b17",
+    "KRW-SUI_minute5.csv": "7810f9c922fd1f50b5ce121ca4e6ae20ee13da3c474dd70609ea2df79fd73fe9",
+    "KRW-XRP_minute5.csv": "39e86db831e0ff12cf89b8df6b172e612955795c83009a86255ebe57054145c2"
+  }
+}

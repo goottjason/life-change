@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import time
+from typing import Callable
 
 from config.charter import (
     LIMIT_UNFILLED_TIMEOUT_SEC, LIMIT_REORDER_MAX, MIN_ORDER_KRW,
@@ -25,6 +26,12 @@ class OrderManager:
         self.client = client
         self.poll_timeout_sec = poll_timeout_sec
         self.poll_interval_sec = poll_interval_sec
+        self.on_wait: Callable[[], None] | None = None
+
+    def _service_wait(self) -> None:
+        """Keep held-price exits alive while another order awaits a fill."""
+        if self.on_wait is not None:
+            self.on_wait()
 
     # ── 진입 (§6.1, §6.3) ────────────────────────────────────
     def enter_long(self, market: str, price: float, krw: float) -> OrderResult:
@@ -119,6 +126,7 @@ class OrderManager:
         deadline = time.monotonic() + self.poll_timeout_sec
         detail = None
         while True:
+            self._service_wait()
             detail = self.client.get_order_detail(res.order_id)
             if detail:
                 executed = float(detail.get("executed_volume", 0) or 0)
@@ -144,6 +152,7 @@ class OrderManager:
             return True
         deadline = time.monotonic() + self.poll_timeout_sec
         while True:
+            self._service_wait()
             if not self.client.get_open_orders(market):
                 return True
             if time.monotonic() >= deadline:

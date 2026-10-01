@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
-CHARTER_VERSION = "v4.4"
+CHARTER_VERSION = "v4.5"
 
 # ── 자본·수수료 (헌장 §1, §13) ────────────────────────────────
 # 자본은 더 이상 고정값이 아니라 '실계좌 잔고(총 자산)'를 런타임에 읽어서 쓴다 (헌장 v1.1 §7.1).
@@ -81,6 +81,7 @@ ATR_SHRINK_RATIO = 0.5              # 변동성 축소 판정: 진입시 ATR의 
 # ── 주문 집행 (헌장 §6) ──────────────────────────────────────
 LIMIT_UNFILLED_TIMEOUT_SEC = 30     # 지정가 미체결 취소 시간 (§6.3)
 LIMIT_REORDER_MAX = 1               # 미체결 재주문 허용 횟수 (§6.3)
+HELD_PRICE_EXIT_INTERVAL_SEC = 10   # v4.5: 스캔/체결 대기 중 보유 가격 청산 확인 목표 간격
 
 # ── 청산 실패 백오프 (§6.7, v2.7) ────────────────────────────
 # 실매매에서 청산 실패를 **매 tick(13초)** 재시도해 10시간 42분 동안 2,854건이 쌓였다.
@@ -476,8 +477,10 @@ STRATEGY_SPECS: dict[str, StrategySpec] = {
 #   배경: §11 백테스트 0건·인큐베이션 생략으로 실계좌 투입됐고, ACTIVE_STRATEGIES 를 바꾸면서
 #   CHARTER_VERSION 을 올리지 않아 §9.7 승인 게이트도 통과했다(→ charter_fingerprint 로 수정).
 #   복귀 조건: §11 통과(승률>55%·PF>1.5·MDD<20%·100거래+) → 5,000원 인큐베이션 2~4주.
-# breakout 은 v4.0 실험 트랙(EXPERIMENTAL) — §11 미통과 상태로 가동하되 주문 상한이 강제된다.
-ACTIVE_STRATEGIES: tuple[str, ...] = ("rsi2", "rsi2_15m", "breakout")
+# v4.5: profit takes priority over buying experimental samples. Breakout's live
+# cohort lost 3,439 KRW; fixed variants did not sustain an edge across periods.
+# Keep its spec and ledger for research/recovery, but stop new live entries.
+ACTIVE_STRATEGIES: tuple[str, ...] = ("rsi2", "rsi2_15m")
 
 
 # ── §11 검증 단계 (v2.7) ─────────────────────────────────────
@@ -608,6 +611,7 @@ def charter_fingerprint() -> str:
         f"exp_risk={EXPERIMENT_RISK_RATIO!r}",
         f"maxpos_v={MAX_POSITIONS_VALIDATED!r}",
         f"maxpos_e={MAX_POSITIONS_EXPERIMENTAL!r}",
+        f"held_price_interval={HELD_PRICE_EXIT_INTERVAL_SEC!r}",
     ]) + ")")
     # ★ 거래 대상 유니버스도 승인 대상이다 (v3.1, 2026-08-13).
     #   종목을 추가하거나 스프레드 상한을 바꾸면 **실제로 무엇을 사는지**가 달라진다.

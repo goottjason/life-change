@@ -95,6 +95,47 @@ class Trader:
         self._trend_at: dict[str, float] = {}      # 종목별 추세 갱신 시각(monotonic)
         # {코인: {전략: {action, reason, rsi2, atr_pct, trend_up, gate}}} — 진입 진단 (v1.5)
         self.signal_view: dict[str, dict] = {}
+        self._price_exit_at = 0.0
+        self._servicing_price_exits = False
+        self._closing: set[str] = set()
+        self.orders.on_wait = self._check_held_price_exits
+
+    def _check_held_price_exits(self) -> None:
+        """Check current held prices during scans and order waits, at most every 10s.
+
+        This bypasses entry-screening and trend requests. Candle-dependent exits
+        still run in _process_market; price checks do not turn into new entries.
+        API/confirmation latency remains, so 10s is a target, not a fill guarantee.
+        """
+        if (getattr(self, "_servicing_price_exits", False) or not self.positions
+                or getattr(self.failsafe, "triggered", False)):
+            return
+        now = time.monotonic()
+        if now - getattr(self, "_price_exit_at", 0.0) < C.HELD_PRICE_EXIT_INTERVAL_SEC:
+            return
+        self._price_exit_at = now
+        self._servicing_price_exits = True
+        try:
+            for key, pos in list(self.positions.items()):
+                if key in getattr(self, "_closing", set()):
+                    continue
+                if pos.spec.stop_on_close or pos.spec.partial_tp_ratio > 0:
+                    continue  # Candle-close/structural partial exits need their own path.
+                try:
+                    price = self.client.get_price(pos.market)
+                    if not (price > 0):
+                        continue
+                    self.last_prices[pos.market] = price
+                    pos.update_high(price)
+                    reason = pos.check_price_exit(price)
+                    if reason in (ExitReason.STOP_LOSS, ExitReason.TAKE_PROFIT):
+                        self._close(pos, price, reason, note="held-price priority check")
+                except Exception as e:
+                    self.failsafe.on_api_error(e)
+                    self.logger.log("tick_error", market=pos.market,
+                                    reason=f"price_exit: {type(e).__name__}: {e}")
+        finally:
+            self._servicing_price_exits = False
 
     def toggle_strategy(self, name: str, enable: bool) -> bool:
         """런타임 전략 온오프 (대시보드 지원). 반환값은 변경 후 상태."""
@@ -131,7 +172,7 @@ class Trader:
         전략별 성과 비교가 통째로 무의미해지므로, 원래 산 전략으로 되돌린다.
         """
         original = last_entry_strategy(market)
-        if original and original in strategies and f"{original}:{market}" not in taken:
+        if original and original in ALL_STRATEGIES and f"{original}:{market}" not in taken:
             return original
         return next((n for n in strategies if f"{n}:{market}" not in taken), None)
 
@@ -187,6 +228,9 @@ class Trader:
         if not self.failsafe.check_feed():
             return
 
+        # A universe refresh or a buy-order wait must not precede held-price stops.
+        self._check_held_price_exits()
+
         # 자본 갱신: 실계좌 잔고(총 자산)를 읽어 사이징·서킷의 기준으로 삼는다 (§7.1)
         try:
             avail, equity = self.client.get_account_equity(self.last_prices.get)
@@ -199,10 +243,10 @@ class Trader:
         # 요구하는 최대 봉 수만큼 받는다(+16 = ATR 워밍업 여유). pyupbit 는 count>200 을
         # 내부 페이지네이션으로 처리한다 — 5분봉이 마켓당 2요청이 되지만 호출이 직렬이라
         # 레이트리밋과 무관하고 tick 주기만 소폭 늘어난다(§3.2-j 분석과 동일한 산술).
-        timeframes = sorted({s.spec.timeframe for s in self.strategies.values()})
-        counts = {tf: max(200, *(s.spec.breakout_bars + 16
-                                 for s in self.strategies.values()
-                                 if s.spec.timeframe == tf))
+        specs = [s.spec for s in self.strategies.values()] + [p.spec for p in self.positions.values()]
+        timeframes = sorted({spec.timeframe for spec in specs})
+        counts = {tf: max(200, *(spec.breakout_bars + 16
+                                 for spec in specs if spec.timeframe == tf))
                   for tf in timeframes}
         # ★ 순회 대상 = 유니버스 ∪ **보유 종목** (v4.1, 2026-08-18 VVV 사고).
         #   유니버스만 돌면, 산 뒤에 스크리너에서 빠진 종목(투자주의 플래그·스프레드 악화·
@@ -213,6 +257,7 @@ class Trader:
         held_only = [m for m in {p.market for p in self.positions.values()} if m not in universe]
         seen: set[str] = set()
         for market in universe + sorted(held_only):
+            self._check_held_price_exits()
             frames: dict[str, pd.DataFrame] = {}
             for tf in timeframes:
                 try:
@@ -460,6 +505,17 @@ class Trader:
             f"(+{pnl:.0f}원) — 잔량 {pos.volume:.8f}, 손절을 본절({pos.entry_price:.4g})로 이동")
 
     def _close(self, pos: Position, price: float, reason: ExitReason, note: str = "") -> None:
+        if not hasattr(self, "_closing"):
+            self._closing = set()
+        if pos.key in self._closing:
+            return
+        self._closing.add(pos.key)
+        try:
+            self._execute_close(pos, price, reason, note)
+        finally:
+            self._closing.discard(pos.key)
+
+    def _execute_close(self, pos: Position, price: float, reason: ExitReason, note: str = "") -> None:
         # 청산 실패 백오프 (§6.7, v2.7): 직전 실패로 정한 대기 시간이 안 지났으면 건너뛴다.
         # 실매매에서 팔 수 없는 주문(5,000원 미만 먼지)을 매 tick 재시도해 10시간 42분 동안
         # 2,854건이 쌓였다 — 다시 보내도 성공할 수 없는 주문이었다.
