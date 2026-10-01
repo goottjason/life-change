@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
-CHARTER_VERSION = "v4.3"
+CHARTER_VERSION = "v4.4"
 
 # ── 자본·수수료 (헌장 §1, §13) ────────────────────────────────
 # 자본은 더 이상 고정값이 아니라 '실계좌 잔고(총 자산)'를 런타임에 읽어서 쓴다 (헌장 v1.1 §7.1).
@@ -528,12 +528,15 @@ EXPERIMENTAL_STRATEGIES: frozenset[str] = frozenset({"breakout"})
 # 자본이 커지면: 9만원 → 한 건 약 3만원 / 30만원 → 약 10만원 / 90만원 → 약 30만원.
 EXPERIMENTAL_STRATEGIES: frozenset[str] = frozenset({"breakout"})
 EXPERIMENT_ALLOC_RATIO = 1 / 3      # ① 한 건 최대 = 자본의 1/3
-EXPERIMENT_RISK_RATIO = 0.0033      # ② 거래당 위험 = 자본의 0.33% (9만원 기준 약 300원)
+# v4.4 (2026-10-01): v4.3 실거래 202건 −3,439원. 신호 강화는 장기 재계산에서
+# 거래당 개선이 일관되지 않아 유지하고, 표본 수집 중 위험 예산만 약 9.1% 축소한다.
+# 이것은 엣지 개선이 아니라 손익 노출 축소다. 근거: research/results/live_review_2026-10-01.txt.
+EXPERIMENT_RISK_RATIO = 0.0030      # ② 거래당 위험 = 자본의 0.30% (9만원 기준 270원)
 
 
 def experiment_position_krw(capital: float | None, stop_ratio: float | None) -> float:
     """
-    실험 트랙 주문금액 (v4.3). 자본에 비례하므로 입금하면 자동으로 커진다.
+    실험 트랙 주문금액 (v4.4). 자본에 비례하므로 입금하면 자동으로 커진다.
     stop_ratio 를 모르면(호출부가 안 넘기면) 배분 상한만 적용한다 — 위험 정규화는
     손절거리를 알아야 성립하기 때문이다.
     """
@@ -555,7 +558,7 @@ def position_cap_for(strategy: str, krw: float,
     """
     전략 범주별 주문금액 상한.
       · 인큐베이션 → 최소주문금액 (§11-3)
-      · 실험 트랙  → experiment_position_krw() = min(자본×1/3, 자본×0.33%÷손절폭) (v4.3)
+      · 실험 트랙  → experiment_position_krw() = min(자본×1/3, 자본×0.30%÷손절폭) (v4.4)
     capital 을 주지 않으면 폴백 기본자본을 쓴다(테스트·오프라인 경로 호환).
     """
     if strategy in INCUBATING_STRATEGIES:

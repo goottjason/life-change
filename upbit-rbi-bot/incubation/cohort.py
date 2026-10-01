@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 
 from config.settings import settings
@@ -58,10 +59,20 @@ def _bucket_axes(t: dict) -> dict[str, str]:
     tr = ctx.get("trend_up")
     vol = ctx.get("vol_ratio")
     hour = int(t["entry_ts"][11:13]) if len(t["entry_ts"]) >= 13 else None
+    def band(value, bounds, labels):
+        if not isinstance(value, (int, float)) or not math.isfinite(value):
+            return "기록없음"
+        return next((label for edge, label in zip(bounds, labels) if value < edge), labels[-1])
+
     return {
         "추세(1시간봉)": "위" if tr is True else ("아래" if tr is False else "판정불가"),
         "거래량비": (("2배+" if vol >= 2.0 else "1.5~2배" if vol >= 1.5 else "1.5배 미만")
                      if isinstance(vol, (int, float)) else "기록없음"),
+        "거래량비(돌파 상세)": band(vol, (5, 7, 10), ("5배 미만", "5~7배", "7~10배", "10배+")),
+        "변동성(ATR/가격)": band(ctx.get("atr_pct"), (0.15, 0.3, 0.6),
+                                 ("0.15% 미만", "0.15~0.3%", "0.3~0.6%", "0.6%+")),
+        "돌파폭": band(ctx.get("breakout_pct"), (0.15, 0.3, 0.6),
+                       ("0.15% 미만", "0.15~0.3%", "0.3~0.6%", "0.6%+")),
         "시간대(KST)": (f"{hour // 4 * 4:02d}~{hour // 4 * 4 + 4:02d}시"
                         if hour is not None else "기록없음"),
         "종목": t["market"],
@@ -72,13 +83,23 @@ def _bucket_axes(t: dict) -> dict[str, str]:
 def _stat(trades: list[dict]) -> dict:
     n = len(trades)
     wins = sum(1 for t in trades if t["pct"] > 0)
+    size = sum(t["size_krw"] for t in trades)
+    pnl = sum(t["pnl_krw"] for t in trades)
+    positive = [t["pct"] for t in trades if t["pct"] > 0]
+    negative = [t["pct"] for t in trades if t["pct"] < 0]
     return {"n": n, "winrate": round(wins / n * 100, 1) if n else 0.0,
             "exp_pct": round(sum(t["pct"] for t in trades) / n, 3) if n else 0.0,
-            "pnl_krw": round(sum(t["pnl_krw"] for t in trades))}
+            "weighted_pct": round(pnl / size * 100, 3) if size else None,
+            "avg_win_pct": round(sum(positive) / len(positive), 3) if positive else None,
+            "avg_loss_pct": round(sum(negative) / len(negative), 3) if negative else None,
+            "pnl_krw": round(pnl)}
 
 
-def report(db_path: str | None = None) -> dict:
+def report(db_path: str | None = None, fingerprint: str | None = None) -> dict:
     trades = _load(db_path)
+    # 진입 당시 지문으로 분리한다. 청산 시점이 개정 이후여도 옛 설정의 거래다.
+    if fingerprint is not None:
+        trades = [t for t in trades if t["ctx"].get("fingerprint") == fingerprint]
     grouped: dict[str, dict[str, list[dict]]] = {}
     for t in trades:
         for axis, bucket in _bucket_axes(t).items():
@@ -95,10 +116,13 @@ def format_text(rep: dict) -> str:
     """텔레그램/콘솔용 평이한 한국어. 코호트 = '같은 조건끼리 묶은 거래 그룹'."""
     o = rep["overall"]
     lines = [f"🧪 breakout 실험 트랙 — 왕복 {rep['n']}건, "
-             f"누적 {o['pnl_krw']:+,}원 (거래당 {o['exp_pct']:+.3f}%)"]
+             f"누적 {o['pnl_krw']:+,}원 (거래당 단순평균 {o['exp_pct']:+.3f}%)"]
     if not rep["n"]:
         lines.append("아직 청산된 거래가 없습니다.")
         return "\n".join(lines)
+    if o.get("weighted_pct") is not None:
+        lines.append(f"진입금액 가중 수익률 {o['weighted_pct']:+.3f}% — "
+                     "주문 크기가 달랐던 거래의 원화 성과를 함께 확인")
     if rep["n"] < MIN_JUDGE:
         lines.append(f"표본 {rep['n']}건 — {MIN_JUDGE}건 미만이라 코호트 판정은 하지 않습니다. "
                      f"(적은 표본의 승률은 운입니다)")

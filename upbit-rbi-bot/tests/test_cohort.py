@@ -62,3 +62,31 @@ def test_cohort_survives_missing_context(tmp_path):
     rep = cohort.report(db)
     assert rep["n"] == 1
     assert {b["bucket"] for b in rep["axes"]["설정(지문)"]} == {"기록없음"}
+    for axis in ("변동성(ATR/가격)", "돌파폭", "거래량비(돌파 상세)"):
+        assert rep["axes"][axis][0]["bucket"] == "기록없음"
+
+
+def test_cohort_separates_entry_settings_and_weighted_returns(tmp_path):
+    """작은 주문의 큰 %이익이 큰 주문의 손실을 감추면 안 된다."""
+    db = str(tmp_path / "t.sqlite")
+    lg = TradeLogger(db)
+    for fp, size, pnl, atr, breakout, vol in [
+        ("old", 5_000, 100, .149, .15, 6.99),
+        ("old", 30_000, -300, .6, .6, 10),
+        ("new", 10_000, 200, .3, .3, 7),
+    ]:
+        lg.log("entry", strategy="breakout", market="KRW-X", size_krw=size,
+               context=json.dumps({"fingerprint": fp, "atr_pct": atr,
+                                   "breakout_pct": breakout, "vol_ratio": vol}))
+        lg.log("exit", strategy="breakout", market="KRW-X", pnl_krw=pnl)
+    rep = cohort.report(db, fingerprint="old")
+    assert rep["n"] == 2
+    assert rep["overall"]["exp_pct"] == .5
+    assert rep["overall"]["weighted_pct"] == -.571
+    assert rep["overall"]["pnl_krw"] == -200
+    assert rep["overall"]["avg_win_pct"] == 2
+    assert rep["overall"]["avg_loss_pct"] == -1
+    assert {r["bucket"] for r in rep["axes"]["변동성(ATR/가격)"]} == {"0.15% 미만", "0.6%+"}
+    assert {r["bucket"] for r in rep["axes"]["돌파폭"]} == {"0.15~0.3%", "0.6%+"}
+    assert {r["bucket"] for r in rep["axes"]["거래량비(돌파 상세)"]} == {"5~7배", "10배+"}
+    assert cohort.report(db, fingerprint="unknown")["n"] == 0

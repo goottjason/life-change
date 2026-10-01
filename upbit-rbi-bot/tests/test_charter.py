@@ -348,7 +348,7 @@ def test_v4_experimental_track_constants():
     assert C.EXPERIMENTAL_STRATEGIES == frozenset({"breakout"})
     # v4.3: 고정 원화 → 자본 비율 (입금하면 자동 스케일)
     assert C.EXPERIMENT_ALLOC_RATIO == 1 / 3
-    assert C.EXPERIMENT_RISK_RATIO == 0.0033
+    assert C.EXPERIMENT_RISK_RATIO == 0.0030
     assert C.MAX_POSITIONS_VALIDATED == 1
     assert C.MAX_POSITIONS_EXPERIMENTAL == 3
     assert C.MAX_CONCURRENT_POSITIONS == 4          # 트랙 합
@@ -358,14 +358,14 @@ def test_v4_experimental_track_constants():
 
 
 def test_v4_experiment_order_cap_enforced():
-    """실험 트랙은 사이징 결과와 무관하게 10,000원을 넘을 수 없다 (easy_teaching 사고 재발 방지)."""
-    # v4.3: 자본 9만원·손절 1% → min(3만, 297/0.01=29,700) = 29,700원
-    assert round(C.position_cap_for("breakout", 90_000.0, capital=90_000, stop_ratio=0.01)) == 29_700
-    # 변동성 큰 종목(손절 2.39%)은 자동 축소 → 297/0.0239 ≈ 12,427원
-    assert round(C.position_cap_for("breakout", 90_000.0, capital=90_000, stop_ratio=0.0239)) == 12_427
+    """실험 트랙은 사이징 결과와 무관하게 자본·손절거리 기반 상한을 지킨다."""
+    # v4.4: 자본 9만원·손절 1% → min(3만, 270/0.01) = 27,000원
+    assert round(C.position_cap_for("breakout", 90_000.0, capital=90_000, stop_ratio=0.01)) == 27_000
+    # 변동성 큰 종목(손절 2.39%)은 자동 축소 → 270/0.0239 ≈ 11,297원
+    assert round(C.position_cap_for("breakout", 90_000.0, capital=90_000, stop_ratio=0.0239)) == 11_297
     # ★ 자본이 커지면 그대로 따라 커진다 (운영자 요구: 증액 시 자동 스케일)
-    assert round(C.position_cap_for("breakout", 1e9, capital=300_000, stop_ratio=0.01)) == 99_000
-    assert round(C.position_cap_for("breakout", 1e9, capital=900_000, stop_ratio=0.01)) == 297_000
+    assert round(C.position_cap_for("breakout", 1e9, capital=300_000, stop_ratio=0.01)) == 90_000
+    assert round(C.position_cap_for("breakout", 1e9, capital=900_000, stop_ratio=0.01)) == 270_000
     # 손절폭이 아주 좁으면 배분 상한(1/3)이 먼저 구속한다
     assert C.position_cap_for("breakout", 1e9, capital=90_000, stop_ratio=0.001) == 30_000.0
     assert C.position_cap_for("breakout", 7_000.0, capital=90_000, stop_ratio=0.01) == 7_000.0

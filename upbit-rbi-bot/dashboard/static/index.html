@@ -120,7 +120,8 @@
     <p class="hint">
       이 트랙의 목적은 <b>당장 돈을 버는 게 아니라, 자주 거래해서 데이터를 모으는 것</b>입니다.
       과거 데이터 기준 이 전략은 거래당 약 −0.19%로, 건당 3만원이면 <b>월 9천원쯤 수업료</b>를 내는 셈입니다 (최근 실전은 그보다 좋지만 아직 표본이 적습니다).
-      대신 한 건당 <b>자본의 1/3(지금 약 3만원)</b>까지만 쓰고, <b>한 번에 잃는 돈이 자본의 0.33%(약 300원)</b>로 고정되도록 묶여 있고, 매주 이 표를 보고
+      한 건당 <b>자본의 1/3</b>을 상한으로 두고, <b>손절거리로 계산한 위험 예산은 자본의 0.30%</b>입니다.
+      주문금액은 이 두 제한 중 작은 값으로 정합니다. 급변·체결 비용으로 실제 손실은 예산보다 클 수 있습니다. 매주 이 표를 보고
       "어떤 조건의 거래가 손해였나"를 찾아 규칙을 다듬습니다.
     </p>
     <div id="experiment"></div>
@@ -305,7 +306,10 @@ function renderExperiment(exp){
     html = `<div class="grid" style="margin-bottom:14px">`+
       kv("사고판 횟수", n+"건", n<JUDGE?`${JUDGE}건부터 첫 판정`: "판정 가능") +
       kv("누적 손익", wonS(o.pnl_krw), "실험에 쓴 돈의 결과", cls(o.pnl_krw)) +
-      kv("거래당", pct(o.exp_pct,3), "예상 수업료 −0.19% 근처면 정상", cls(o.exp_pct)) +
+      kv("거래당 평균", pct(o.exp_pct,3), "각 거래의 수익률을 단순평균", cls(o.exp_pct)) +
+      kv("금액 가중 수익률", pct(o.weighted_pct,3), "누적 손익 ÷ 누적 진입금액", cls(o.weighted_pct)) +
+      kv("평균 승리", pct(o.avg_win_pct,3), "수익 거래의 평균 수익률", cls(o.avg_win_pct)) +
+      kv("평균 손실", pct(o.avg_loss_pct,3), "손실 거래의 평균 수익률", cls(o.avg_loss_pct)) +
       kv("승률", (o.winrate==null?"—":o.winrate.toFixed(0)+"%"), "이 전략은 30% 근처가 보통", "") +
       `</div>`;
     if (n < JUDGE){
@@ -314,10 +318,12 @@ function renderExperiment(exp){
         첫 판정까지 <b>${n}/${JUDGE}건</b> — 그 전의 승률·손익은 운일 수 있어 판정하지 않습니다.</div>`;
     }
     const axes = exp.axes||{};
-    const order = ["추세(1시간봉)","거래량비","시간대(KST)","종목","설정(지문)"];
+    const order = ["추세(1시간봉)","거래량비(돌파 상세)","변동성(ATR/가격)","돌파폭","시간대(KST)","종목","설정(지문)"];
     const axisHint = {
       "추세(1시간봉)":"큰 흐름이 상승일 때 산 돌파 vs 하락일 때 산 돌파",
-      "거래량비":"거래량이 평소의 몇 배일 때 샀나",
+      "거래량비(돌파 상세)":"거래량이 평소의 몇 배일 때 샀나",
+      "변동성(ATR/가격)":"진입할 때 한 봉의 변동폭이 가격의 몇 %였나",
+      "돌파폭":"직전 24시간 고점을 몇 % 넘어섰을 때 샀나",
       "시간대(KST)":"하루 중 언제 산 거래인가",
       "종목":"어떤 코인에서 샀나",
       "설정(지문)":"규칙을 바꾼 뒤(버전별)의 성적 비교"
@@ -509,8 +515,8 @@ function renderTrips(trips){
 
 function renderExpect(s){
   const eq = (s.risk||{}).equity || 90000;
-  // 검증 트랙: 실효 리스크 min(f 2.4%, 배분 2/3 × 손절 2.5%) ≈ 1.67% → 포지션 ≈ 자본의 2/3
-  const size = eq * 2/3;
+  // 검증 트랙: v4.3부터 배분 상한 자본의 1/2 (5분 손절 2.5%이면 명목 위험 1.25%).
+  const size = eq * 1/2;
   const per = size*0.00176, day = per*1.0;
   document.getElementById("expect").innerHTML = `
     <p>지금 계좌(<b>${won(eq)}</b>) 기준으로 <b>과거 데이터가 말하는</b> 기대치입니다.
